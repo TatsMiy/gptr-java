@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>gptr 观测台</title>
+<title data-i18n="app.title">gptr 观测台</title>
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -11,34 +11,40 @@
 <header class="topbar">
   <div class="brand">
     <span class="logo">🔭</span>
-    <h1>gptr 观测台</h1>
-    <span class="sub">deep research 任务控制与事件时间线</span>
+    <h1 data-i18n="app.title">gptr 观测台</h1>
+    <span class="sub" data-i18n="app.subtitle">deep research 任务控制与事件时间线</span>
   </div>
   <div class="actions">
-    <label class="chk"><input type="checkbox" id="autoRefresh" checked> 自动刷新</label>
-    <button class="btn" id="configBtn" title="全局运行配置（保存后重启 worker 生效）">⚙ 配置</button>
-    <button class="btn primary" id="submitBtn">＋ 提交新研究</button>
+    <label class="chk"><input type="checkbox" id="autoRefresh" checked> <span data-i18n="app.autoRefresh">自动刷新</span></label>
+    <!-- 界面语言切换：这里的 option 文本是 UI 文案（可翻）；与提交表单里的 #fLanguage 不同 —— 后者是「值」 -->
+    <select id="langSelect" data-i18n-attr="title:app.langLabel" title="界面语言">
+      <option value="zh" data-i18n="lang.zh">中文</option>
+      <option value="en" data-i18n="lang.en">English</option>
+    </select>
+    <button class="btn" id="configBtn" data-i18n="btn.config" data-i18n-attr="title:btn.config.title" title="全局运行配置（保存后重启 worker 生效）">⚙ 配置</button>
+    <button class="btn primary" id="submitBtn" data-i18n="btn.submit">＋ 提交新研究</button>
   </div>
 </header>
 
 <main>
   <!-- 统计卡 -->
   <section class="cards" id="statsCards">
-    <div class="card"><div class="k">24h 任务</div><div class="v" id="statTotal">–</div></div>
-    <div class="card"><div class="k">24h 花费</div><div class="v" id="statCost">–</div></div>
-    <div class="card run"><div class="k">运行中</div><div class="v" id="statRunning">–</div></div>
-    <div class="card ok"><div class="k">24h 成功</div><div class="v" id="statOk">–</div></div>
-    <div class="card bad"><div class="k">24h 失败</div><div class="v" id="statBad">–</div></div>
-    <div class="card note"><div class="k">窗口起点</div><div class="v small" id="statSince">–</div></div>
+    <div class="card"><div class="k" data-i18n="stat.tasks24h">24h 任务</div><div class="v" id="statTotal">–</div></div>
+    <div class="card"><div class="k" data-i18n="stat.cost24h">24h 花费</div><div class="v" id="statCost">–</div></div>
+    <div class="card run"><div class="k" data-i18n="stat.running">运行中</div><div class="v" id="statRunning">–</div></div>
+    <div class="card ok"><div class="k" data-i18n="stat.ok24h">24h 成功</div><div class="v" id="statOk">–</div></div>
+    <div class="card bad"><div class="k" data-i18n="stat.bad24h">24h 失败</div><div class="v" id="statBad">–</div></div>
+    <div class="card note"><div class="k" data-i18n="stat.since">窗口起点</div><div class="v small" id="statSince">–</div></div>
   </section>
 
   <!-- 任务列表 -->
   <section class="panel tasks-panel">
     <div class="panel-head">
-      <h2>任务</h2>
+      <h2 data-i18n="task.heading">任务</h2>
       <div class="filters">
         <select id="statusFilter">
-          <option value="">全部状态</option>
+          <option value="" data-i18n="task.filterAll">全部状态</option>
+          <!-- 以下 option 文本 = 状态「值」，不翻译 -->
           <option value="PENDING">PENDING</option>
           <option value="RUNNING">RUNNING</option>
           <option value="SUCCEEDED">SUCCEEDED</option>
@@ -46,22 +52,24 @@
           <option value="CANCELLED">CANCELLED</option>
           <option value="SUSPENDED">SUSPENDED</option>
         </select>
-        <button class="btn" id="reloadTasks">↻ 刷新</button>
-        <button class="btn" id="pagePrev" disabled>‹ 更早</button>
-        <button class="btn" id="pageNext" disabled>更早 ›</button>
+        <button class="btn" id="reloadTasks" data-i18n="btn.reload">↻ 刷新</button>
+        <button class="btn" id="pagePrev" disabled data-i18n="btn.older">‹ 更早</button>
+        <button class="btn" id="pageNext" disabled data-i18n="btn.newer">更新 ›</button>
       </div>
     </div>
     <div class="table-wrap">
       <table id="taskTable">
         <thead>
           <tr>
-            <th>状态</th><th>模式</th><th>研究问题</th>
-            <th>尝试</th><th>步数</th><th>花费 $</th><th>创建时间</th><th></th>
+            <th data-i18n="task.thStatus">状态</th><th data-i18n="task.thMode">模式</th>
+            <th data-i18n="task.thQuery">研究问题</th>
+            <th data-i18n="task.thAttempts">尝试</th><th data-i18n="task.thSteps">步数</th>
+            <th data-i18n="task.thCost">花费 $</th><th data-i18n="task.thCreated">创建时间</th><th></th>
           </tr>
         </thead>
         <tbody id="taskBody"></tbody>
       </table>
-      <div class="empty" id="taskEmpty" hidden>暂无任务</div>
+      <div class="empty" id="taskEmpty" hidden data-i18n="task.empty">暂无任务</div>
     </div>
   </section>
 </main>
@@ -78,9 +86,9 @@
       <div class="drawer-query" id="dQuery"></div>
     </div>
     <div class="drawer-ops">
-      <button class="btn" id="dFork" title="以本任务为蓝图新建独立任务（可改参数后提交）">📋 复制为新任务</button>
-      <button class="btn warn" id="dCancel">取消</button>
-      <button class="btn" id="dRetry">重试</button>
+      <button class="btn" id="dFork" data-i18n="btn.fork" data-i18n-attr="title:btn.fork.title" title="以本任务为蓝图新建独立任务（可改参数后提交）">📋 复制为新任务</button>
+      <button class="btn warn" id="dCancel" data-i18n="btn.cancelTask">取消</button>
+      <button class="btn" id="dRetry" data-i18n="btn.retry">重试</button>
       <button class="btn" id="dClose">✕</button>
     </div>
   </div>
@@ -89,9 +97,9 @@
   <div class="dError" id="dError" hidden></div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="timeline">时间线</button>
-    <button class="tab" data-tab="evidence">证据库</button>
-    <button class="tab" data-tab="report">报告</button>
+    <button class="tab active" data-tab="timeline" data-i18n="tab.timeline">时间线</button>
+    <button class="tab" data-tab="evidence" data-i18n="tab.evidence">证据库</button>
+    <button class="tab" data-tab="report" data-i18n="tab.report">报告</button>
   </div>
 
   <div class="tab-body" id="tabTimeline">
@@ -101,13 +109,13 @@
   <div class="tab-body" id="tabEvidence" hidden>
     <div class="ev-toolbar">
       <span class="hint" id="evHint"></span>
-      <button class="btn" id="evReload">↻ 重新加载</button>
+      <button class="btn" id="evReload" data-i18n="btn.reloadShort">↻ 重新加载</button>
     </div>
     <div class="ev-list" id="evList"></div>
   </div>
   <div class="tab-body" id="tabReport" hidden>
     <div class="report-toolbar">
-      <button class="btn" id="reportReload">↻ 重新加载</button>
+      <button class="btn" id="reportReload" data-i18n="btn.reloadShort">↻ 重新加载</button>
       <span class="hint" id="reportHint"></span>
     </div>
     <pre class="report-body" id="reportBody"></pre>
@@ -118,40 +126,41 @@
 <!-- 提交弹窗 -->
 <dialog id="submitDialog">
   <form method="dialog" id="submitForm">
-    <h2 id="submitDialogTitle">提交新研究</h2>
+    <h2 id="submitDialogTitle" data-i18n="form.title">提交新研究</h2>
     <label class="field">
-      <span>研究问题 *</span>
-      <textarea id="fQuery" rows="4" required
-        placeholder="例如：DeepSeek-R1 的推理模式与常规模式在哪些任务上差异最大？"></textarea>
+      <span data-i18n="form.queryLabel">研究问题 *</span>
+      <textarea id="fQuery" rows="4" required data-i18n-attr="placeholder:form.queryPlaceholder" placeholder="例如：DeepSeek-R1 的推理模式与常规模式在哪些任务上差异最大？"></textarea>
     </label>
     <label class="field">
-      <span>模式</span>
+      <span data-i18n="form.modeLabel">模式</span>
       <div class="radios">
         <label><input type="radio" name="mode" value="deep_research" checked>
-          deep_research <em>递归搜索 + 逐节写作（默认）</em></label>
+          <span data-i18n-html="form.modeDeep">deep_research <em>递归搜索 + 逐节写作（默认）</em></span></label>
         <label><input type="radio" name="mode" value="flat">
-          flat <em>单轮流水线（快、浅）</em></label>
+          <span data-i18n-html="form.modeFlat">flat <em>单轮流水线（快、浅）</em></span></label>
       </div>
     </label>
     <details class="advanced">
-      <summary>高级参数（默认 = 生产默认）</summary>
+      <summary data-i18n="form.advancedSummary">高级参数（默认 = 生产默认）</summary>
       <div class="adv-grid">
-        <label>深度 depth <input type="number" id="fDepth" value="2" min="1" max="5"></label>
-        <label>广度 breadth <input type="number" id="fBreadth" value="3" min="1" max="8"></label>
-        <label>语言
-          <select id="fLanguage"><option value="中文">中文</option><option value="English">English</option></select>
+        <label><span data-i18n="form.depth">深度 depth</span> <input type="number" id="fDepth" value="2" min="1" max="5"></label>
+        <label><span data-i18n="form.breadth">广度 breadth</span> <input type="number" id="fBreadth" value="3" min="1" max="8"></label>
+        <label><span data-i18n="form.language">语言</span>
+          <!-- ⚠️ 本 select 的两个 option 是**发给引擎的值**（"中文" / "English"），属协议字符串：
+               不翻译、也不随界面语言切换而改动 —— 它们是「值」，不是 UI 文案。 -->
+          <select id="fLanguage" data-i18n-ignore><option value="中文">中文</option><option value="English">English</option></select>
         </label>
-        <label class="chk"><input type="checkbox" id="fSectionWriting" checked> 逐节写作 sectionWriting</label>
-        <label>步骤上限 <input type="number" id="fSteps" value="100" min="1"></label>
-        <label>时长上限(秒) <input type="number" id="fTime" value="1800" min="60"></label>
-        <label>成本上限($) <input type="number" id="fCost" value="10" min="0.01" step="0.01"></label>
-        <label>retriever（留空 = 默认链）
+        <label class="chk"><input type="checkbox" id="fSectionWriting" checked> <span data-i18n="form.sectionWriting">逐节写作 sectionWriting</span></label>
+        <label><span data-i18n="form.steps">步骤上限</span> <input type="number" id="fSteps" value="100" min="1"></label>
+        <label><span data-i18n="form.timeLimit">时长上限(秒)</span> <input type="number" id="fTime" value="1800" min="60"></label>
+        <label><span data-i18n="form.costLimit">成本上限($)</span> <input type="number" id="fCost" value="10" min="0.01" step="0.01"></label>
+        <label><span data-i18n="form.retriever">retriever（留空 = 默认链）</span>
           <input type="text" id="fRetriever" placeholder="python,duckduckgo"></label>
       </div>
     </details>
     <div class="dlg-ops">
-      <button type="button" class="btn" id="fCancel">取消</button>
-      <button type="submit" class="btn primary" id="fSubmit">提交</button>
+      <button type="button" class="btn" id="fCancel" data-i18n="btn.cancel">取消</button>
+      <button type="submit" class="btn primary" id="fSubmit" data-i18n="btn.doSubmit">提交</button>
     </div>
   </form>
 </dialog>
@@ -159,23 +168,25 @@
 <!-- 全局配置（OBS-3） -->
 <dialog id="configDialog">
   <div class="cfg-head">
-    <h2>全局运行配置</h2>
+    <h2 data-i18n="cfg.title">全局运行配置</h2>
     <button class="btn" id="cfgClose">✕</button>
   </div>
-  <p class="cfg-note">作用于新任务（worker 启动时读取覆盖内置默认）。<b>保存后需重启 worker 生效</b>；
-    不热替换、不影响在跑任务。secret 只写不读：页面永不回显明文。</p>
+  <p class="cfg-note" data-i18n-html="cfg.note">作用于新任务（worker 启动时读取覆盖内置默认）。<b>保存后需重启 worker 生效</b>；不热替换、不影响在跑任务。secret 只写不读：页面永不回显明文。</p>
   <div id="configList" class="cfg-list"></div>
   <div class="cfg-footer">
     <div class="cfg-restart">
-      <span class="hint">重启命令（在 gptr-java 目录执行，等当前任务跑完或租约回收后自然接手）：</span>
+      <span class="hint" data-i18n="cfg.restartHint">重启命令（在 gptr-java 目录执行，等当前任务跑完或租约回收后自然接手）：</span>
+      <!-- 命令本身不是文案，不翻译 -->
       <code id="cfgRestartCmd">mvn -pl gptr-worker spring-boot:run "-Dspring-boot.run.arguments=--gptr.clients.llm-provider=openai"</code>
-      <button class="btn" id="cfgCopyCmd">复制命令</button>
+      <button class="btn" id="cfgCopyCmd" data-i18n="btn.copyCmd">复制命令</button>
     </div>
-    <button class="btn primary" id="cfgDone">完成</button>
+    <button class="btn primary" id="cfgDone" data-i18n="btn.done">完成</button>
   </div>
 </dialog>
 
-<!-- 脚本必须在全部 DOM（含各 dialog）之后：bind() 立即执行，引用前移的元素会 null -->
+<!-- 脚本必须在全部 DOM（含各 dialog）之后：bind() 立即执行，引用前移的元素会 null。
+     i18n.js 必须**先于** dashboard.js —— 后者启动时就要用 I18N.t 渲染动态文案。 -->
+<script src="i18n.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

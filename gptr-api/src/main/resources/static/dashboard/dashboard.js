@@ -9,6 +9,7 @@
 
 const API = "/api/v1/tasks";
 
+const { t } = window.I18N;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "");
 
@@ -28,10 +29,12 @@ async function j(method, url, body) {
   const ct = r.headers.get("content-type") || "";
   return ct.includes("json") ? r.json() : r.text();
 }
+// 日期格式跟随界面语言：只有 locale 跟着变，格式规则本身不变
+const locale = () => (I18N.lang === "zh" ? "zh-CN" : "en");
 const fmtTime = (iso) => iso
-  ? new Date(iso).toLocaleTimeString("zh-CN", { hour12: false }) : "–";
+  ? new Date(iso).toLocaleTimeString(locale(), { hour12: false }) : "–";
 const fmtDate = (iso) => iso
-  ? new Date(iso).toLocaleString("zh-CN", { hour12: false }) : "–";
+  ? new Date(iso).toLocaleString(locale(), { hour12: false }) : "–";
 const trunc = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s);
 const el = (tag, cls, text) => {
   const e = document.createElement(tag);
@@ -41,20 +44,30 @@ const el = (tag, cls, text) => {
 };
 
 /* ---------------- 统计卡 ---------------- */
+let statsCache = null;   // 切语言时从缓存重渲，不重新发请求
+
 async function loadStats() {
   try {
     const s = await j("GET", API + "/stats");
-    $("statTotal").textContent = s.tasks24h;
-    $("statCost").textContent = Number(s.cost24hUsd).toFixed(4);
-    $("statRunning").textContent = s.byStatus.RUNNING ?? 0;
-    $("statOk").textContent = s.byStatus.SUCCEEDED ?? 0;
-    $("statBad").textContent = (s.byStatus.FAILED ?? 0) + " / 取消 " + (s.byStatus.CANCELLED ?? 0);
-    $("statSince").textContent = fmtDate(s.since);
+    statsCache = s;
+    renderStats();
   } catch (e) { /* 服务未起时静默，卡保持旧值 */ }
 }
 
+function renderStats() {
+  const s = statsCache;
+  if (!s) return;
+  $("statTotal").textContent = s.tasks24h;
+  $("statCost").textContent = Number(s.cost24hUsd).toFixed(4);
+  $("statRunning").textContent = s.byStatus.RUNNING ?? 0;
+  $("statOk").textContent = s.byStatus.SUCCEEDED ?? 0;
+  $("statBad").textContent = t("stat.badValue", {
+    failed: s.byStatus.FAILED ?? 0, cancelled: s.byStatus.CANCELLED ?? 0 });
+  $("statSince").textContent = fmtDate(s.since);
+}
+
 /* ---------------- 任务列表 ---------------- */
-const listState = { status: "", offset: 0, pageSize: 30, hasMore: false };
+const listState = { status: "", offset: 0, pageSize: 30, hasMore: false, lastTasks: [] };
 
 async function loadTasks() {
   const p = new URLSearchParams({ offset: listState.offset, limit: listState.pageSize });
@@ -62,10 +75,11 @@ async function loadTasks() {
   try {
     const tasks = await j("GET", API + "?" + p.toString());
     listState.hasMore = tasks.length >= listState.pageSize;
+    listState.lastTasks = tasks;
     renderTasks(tasks);
   } catch (e) {
     $("taskEmpty").hidden = false;
-    $("taskEmpty").textContent = "加载失败：" + e.message;
+    $("taskEmpty").textContent = t("msg.loadFailed", { msg: e.message });
   }
 }
 
@@ -81,7 +95,7 @@ function renderTasks(tasks) {
     const q = el("td", "q", trunc(t.query, 60));
     q.title = t.query;
     q.onclick = () => openDrawer(t.id);
-    const view = el("button", "btn", "查看");
+    const view = el("button", "btn", t("btn.view"));
     view.onclick = () => openDrawer(t.id);
     const cell = (node) => { const c = el("td"); c.appendChild(node); return c; };
     const actions = cell(view);
@@ -109,6 +123,8 @@ const drawerState = {
   reconnect: 0,
   seqs: new Set(),        // 已渲染事件 seq（幂等去重）
   rows: [],               // 事件 DOM 行（截断用）
+  events: [],             // 事件对象缓存（切语言时重渲时间线用）
+  evidence: null,         // 最近一次证据视图 {total, notes}
   cap: 500,
   tab: "timeline",
   stage: {},              // stage 名 -> 状态 active/done/fail
@@ -123,15 +139,18 @@ function openDrawer(id) {
   drawerState.mode = null;
   drawerState.seqs = new Set();
   drawerState.rows = [];
+  drawerState.events = [];
+  drawerState.evidence = null;
   drawerState.stage = {};
   drawerState.reportLoaded = false;
+  drawerState.reportChars = null;
   // 修复（实测）：切换任务时若上次停在"证据库"页签，旧任务的证据 DOM 会残留显示在新任务
   // 标题下（q04 的 570 条出现在 Code agents 上）。打开任务一律回到时间线页签并清空旧证据。
   drawerState.tab = "timeline";
   switchTab("timeline");
   $("drawer").hidden = false;
   $("scrim").hidden = false;
-  $("timeline").replaceChildren(el("div", "tl-cap", "连接实时事件流…"));
+  $("timeline").replaceChildren(el("div", "tl-cap", t("tl.connecting")));
   $("dId").textContent = id;
   renderStageStrip();
   connectWs(id);
@@ -147,7 +166,7 @@ async function loadTask(id) {
     renderDrawerHead(t);
     renderDrawerMeta(t);
   } catch (e) {
-    $("dMeta").textContent = "加载失败：" + e.message;
+    $("dMeta").textContent = t("msg.loadFailed", { msg: e.message });
   }
 }
 
@@ -172,16 +191,16 @@ function renderDrawerMeta(t) {
     return s;
   };
   m.append(
-    kv("模式", t.mode), kv("尝试", t.attempt + "/" + t.maxAttempts),
-    kv("步数", t.stepsUsed), kv("花费", "$" + Number(t.costSpentUsd).toFixed(4)),
-    kv("创建", fmtDate(t.createdAt)),
-    kv("开始", t.startedAt ? fmtDate(t.startedAt) : "–"),
-    kv("完成", t.finishedAt ? fmtDate(t.finishedAt) : "–"));
+    kv(t("meta.mode"), t.mode), kv(t("meta.attempts"), t.attempt + "/" + t.maxAttempts),
+    kv(t("meta.steps"), t.stepsUsed), kv(t("meta.cost"), "$" + Number(t.costSpentUsd).toFixed(4)),
+    kv(t("meta.created"), fmtDate(t.createdAt)),
+    kv(t("meta.started"), t.startedAt ? fmtDate(t.startedAt) : "–"),
+    kv(t("meta.finished"), t.finishedAt ? fmtDate(t.finishedAt) : "–"));
   const err = $("dError");
   if (t.status === "FAILED" && (t.errorCode || t.errorDetail)) {
     err.hidden = false;
     err.textContent = (t.errorCode ? "[" + t.errorCode + "] " : "") +
-      (t.errorDetail ? trunc(t.errorDetail, 400) : "（无详细错误）");
+      (t.errorDetail ? trunc(t.errorDetail, 400) : t("meta.noErrorDetail"));
   } else {
     err.hidden = true;
   }
@@ -200,7 +219,7 @@ function renderStageStrip() {
   strip.replaceChildren();
   const stages = MODE_STAGES[drawerState.mode] || [];
   if (!stages.length) {
-    strip.appendChild(el("span", "stage-pill", "加载中…"));
+    strip.appendChild(el("span", "stage-pill", t("stage.loading")));
     return;
   }
   for (const s of stages) {
@@ -245,7 +264,8 @@ function scheduleReconnect(id) {
       // 回放语义：清空后由 WS 订阅推送全量（seq 幂等重建）
       drawerState.seqs = new Set();
       drawerState.rows = [];
-      $("timeline").replaceChildren(el("div", "tl-cap", "断线重连中…"));
+      drawerState.events = [];   // 回放语义：清空缓存，随后由 WS 重建
+      $("timeline").replaceChildren(el("div", "tl-cap", t("tl.reconnecting")));
       connectWs(id);
     }
   }, delay);
@@ -262,6 +282,7 @@ function appendEvent(ev) {
   if (drawerState.seqs.has(ev.seq)) return; // 幂等去重
   drawerState.seqs.add(ev.seq);
   noteStage(ev.type, ev.stage);
+  drawerState.events.push(ev);
   const row = buildEventRow(ev);
   const tl = $("timeline");
   if (tl.querySelector(".tl-cap")) tl.replaceChildren();
@@ -275,6 +296,20 @@ function appendEvent(ev) {
   // 完成后刷新任务头部（成本/状态/按钮态）
   if (ev.type !== "ACTIVITY") loadTask(drawerState.taskId);
   if (drawerState.tab === "report" && ev.type === "SUCCEEDED") loadReport(true);
+}
+
+/* 切语言重渲时间线：从缓存的事件对象重建（不发请求、不丢已收事件） */
+function rerenderTimeline() {
+  const tl = $("timeline");
+  if (!drawerState.events.length) return;   // 还在占位文案阶段，交给 apply() 处理
+  tl.replaceChildren();
+  drawerState.rows = [];
+  for (const ev of drawerState.events) {
+    const row = buildEventRow(ev);
+    tl.appendChild(row);
+    drawerState.rows.push(row);
+  }
+  tl.scrollTop = tl.scrollHeight;
 }
 
 /* 事件类型 → 展示 */
@@ -293,17 +328,17 @@ function buildEventRow(ev) {
     if (subText) sub.textContent = subText;
   };
 
-  if (T === "STAGE_STARTED") { icon.textContent = "▶"; row.classList.add("stage-start"); label.textContent = "阶段开始：" + ev.stage; }
-  else if (T === "STAGE_COMPLETED") { icon.textContent = "✅"; row.classList.add("stage-end"); label.textContent = "阶段完成：" + ev.stage; parseStagePayload(ev.payload, sub); }
-  else if (T === "CREATED") plain("任务入队", "📥", "");
-  else if (T === "DISPATCHED") plain("worker 拾取", "🚀", "");
-  else if (T === "RETRY") plain("重试（attempt+1）", "🔁", "ev-fail");
-  else if (T === "BUDGET_EXCEEDED") plain("预算超限，优雅终止", "💰", "ev-fail");
-  else if (T === "SUCCEEDED") plain("研究完成", "🎉", "ev-succ");
-  else if (T === "FAILED") plain("任务失败", "❌", "ev-fail");
-  else if (T === "CANCELLED") plain("已取消", "🛑", "");
-  else if (T === "WEBHOOK_SENT") plain("webhook 已投递", "🔔", "");
-  else if (T === "LEASE_EXPIRED") plain("租约过期", "⏳", "ev-fail");
+  if (T === "STAGE_STARTED") { icon.textContent = "▶"; row.classList.add("stage-start"); label.textContent = t("ev.stageStarted", { stage: ev.stage }); }
+  else if (T === "STAGE_COMPLETED") { icon.textContent = "✅"; row.classList.add("stage-end"); label.textContent = t("ev.stageCompleted", { stage: ev.stage }); parseStagePayload(ev.payload, sub); }
+  else if (T === "CREATED") plain(t("ev.created"), "📥", "");
+  else if (T === "DISPATCHED") plain(t("ev.dispatched"), "🚀", "");
+  else if (T === "RETRY") plain(t("ev.retry"), "🔁", "ev-fail");
+  else if (T === "BUDGET_EXCEEDED") plain(t("ev.budgetExceeded"), "💰", "ev-fail");
+  else if (T === "SUCCEEDED") plain(t("ev.succeeded"), "🎉", "ev-succ");
+  else if (T === "FAILED") plain(t("ev.failed"), "❌", "ev-fail");
+  else if (T === "CANCELLED") plain(t("ev.cancelled"), "🛑", "");
+  else if (T === "WEBHOOK_SENT") plain(t("ev.webhookSent"), "🔔", "");
+  else if (T === "LEASE_EXPIRED") plain(t("ev.leaseExpired"), "⏳", "ev-fail");
   else if (T === "ACTIVITY") renderActivity(ev.payload, icon, row, label, sub);
   else plain(T, "•", "");
 
@@ -325,38 +360,39 @@ function renderActivity(payloadRaw, icon, row, label, sub) {
     icon.textContent = "⚙️";
     row.classList.add("ev-node");
     if (d.phase === "fail") row.classList.add("ev-fail");
-    label.textContent = phase + "节点 " + name;
+    label.textContent = t("act.node", { phase, name });
     const bits = [];
     if (d.depth !== undefined) bits.push("depth=" + d.depth);
     if (d.learnings !== undefined) bits.push("learnings=" + d.learnings);
     if (d.bank !== undefined) bits.push("bank=" + d.bank);
     if (d.queries !== undefined) bits.push("queries=" + d.queries);
-    if (d.elapsedMs !== undefined) bits.push("耗时 " + (d.elapsedMs / 1000).toFixed(1) + "s");
+    if (d.elapsedMs !== undefined) bits.push(t("act.elapsed", { s: (d.elapsedMs / 1000).toFixed(1) }));
     if (d.chain) bits.push("chain=" + d.chain);
     sub.textContent = bits.join(" · ");
   } else if (kind === "search") {
     icon.textContent = "🔎";
     row.classList.add("ev-search");
-    label.textContent = name || "检索";
+    label.textContent = name || t("act.search");
     const bits = [];
-    if (d.chain) bits.push("链 " + d.chain);
-    if (d.queries !== undefined) bits.push("查询×" + d.queries);
-    if (d.results !== undefined) bits.push("结果×" + d.results);
+    if (d.chain) bits.push(t("act.chain", { chain: d.chain }));
+    if (d.queries !== undefined) bits.push(t("act.queries", { n: d.queries }));
+    if (d.results !== undefined) bits.push(t("act.results", { n: d.results }));
     if (d.retrieverCfg) bits.push("retriever=" + d.retrieverCfg);
     sub.textContent = bits.join(" · ");
   } else if (kind === "section") {
     icon.textContent = "📝";
     row.classList.add("ev-section");
-    label.textContent = "章节完成：" + (name || "(无标题)");
+    label.textContent = t("act.sectionDone", { name: name || t("act.noTitle") });
     const bits = [];
-    if (d.chars !== undefined) bits.push((d.chars / 1000).toFixed(1) + "k 字");
-    if (d.unauthorized) bits.push("未授权引用×" + d.unauthorized);
-    if (d.retried) bits.push("重写×" + d.retried);
-    if (d.index !== undefined) bits.push("第 " + (d.index + 1) + " 节");
+    if (d.chars !== undefined) bits.push(t("act.chars", { k: (d.chars / 1000).toFixed(1) }));
+    if (d.unauthorized) bits.push(t("act.unauthorized", { n: d.unauthorized }));
+    if (d.retried) bits.push(t("act.retried", { n: d.retried }));
+    if (d.index !== undefined) bits.push(t("act.sectionIndex", { n: d.index + 1 }));
     sub.textContent = bits.join(" · ");
   } else {
     icon.textContent = "•";
-    label.textContent = "活动 " + kind + (name ? "：" + name : "");
+    label.textContent = name
+      ? t("act.activityNamed", { kind, name }) : t("act.activity", { kind });
     sub.textContent = JSON.stringify(d);
   }
 }
@@ -391,23 +427,34 @@ async function loadEvidence() {
   if (!id) return;
   const list = $("evList");
   const hint = $("evHint");
-  hint.textContent = "加载中…";
+  hint.textContent = t("stage.loading");
   try {
     const v = await j("GET", API + "/" + id + "/evidence");
+    drawerState.evidence = v;                     // 切语言时从这里重渲
     hint.textContent = v.total > 0
-      ? v.total + " 条结构化证据（extract 提炼：insight 为模型判断，quote 为来源原文）"
-      : "该任务无证据库（deep RESEARCH 未产出 evidenceBank / flat 流水线）";
+      ? t("evd.count", { n: v.total })
+      : t("evd.noneForTask");
     renderEvidence(list, v.notes);
   } catch (e) {
     list.replaceChildren();
-    hint.textContent = String(e.message);
+    hint.textContent = String(e.message);          // 服务端消息原样显示，不翻译
   }
+}
+
+/* 切语言重渲证据库：hint 重新取词，卡片重渲（不发请求） */
+function rerenderEvidence() {
+  const v = drawerState.evidence;
+  if (!v) return;
+  $("evHint").textContent = v.total > 0
+    ? t("evd.count", { n: v.total })
+    : t("evd.noneForTask");
+  renderEvidence($("evList"), v.notes);
 }
 
 function renderEvidence(list, notes) {
   list.replaceChildren();
   if (!notes.length) {
-    list.appendChild(el("div", "ev-none", "（无证据）"));
+    list.appendChild(el("div", "ev-none", t("evd.none")));
     return;
   }
   for (const n of notes) {
@@ -433,7 +480,7 @@ function renderEvidence(list, notes) {
       quoteBox.appendChild(q);
       if (n.quote.length > QUOTE_FOLD) {
         const btn = el("button", "ev-fold",
-          folded ? "展开原文（" + n.quote.length + " 字）" : "收起");
+          folded ? t("evd.fold", { n: n.quote.length }) : t("evd.unfold"));
         btn.onclick = () => {
           if (folded) evOpen.add(n.idx); else evOpen.delete(n.idx);
           renderEvidence(list, notes); // 整表重渲（含记忆展开态）
@@ -469,14 +516,15 @@ async function loadReport(force) {
   const hint = $("reportHint");
   if (drawerState.task && drawerState.task.status !== "SUCCEEDED") {
     body.textContent = "";
-    hint.textContent = "任务尚未成功完成，报告在 SUCCEEDED 后可用。";
+    hint.textContent = t("rpt.notSucceeded");
     return;
   }
-  hint.textContent = "加载中…";
+  hint.textContent = t("stage.loading");
   try {
     const txt = await j("GET", API + "/" + id + "/report");
     body.textContent = txt;
-    hint.textContent = "text/markdown 原文（" + txt.length + " 字符）";
+    drawerState.reportChars = txt.length;
+    hint.textContent = t("rpt.loaded", { n: txt.length });
   } catch (e) {
     body.textContent = "";
     hint.textContent = String(e.message);
@@ -488,7 +536,7 @@ async function doCancel() {
   try {
     await j("POST", API + "/" + drawerState.taskId + "/cancel");
     loadTask(drawerState.taskId);
-  } catch (e) { alert("取消失败：" + e.message); }
+  } catch (e) { alert(t("msg.cancelFailed", { msg: e.message })); }
 }
 async function doRetry() {
   try {
@@ -496,9 +544,10 @@ async function doRetry() {
     // 重试 = 全新运行：清时间线由 WS 回放（事件链从头）
     drawerState.seqs = new Set();
     drawerState.rows = [];
-    $("timeline").replaceChildren(el("div", "tl-cap", "重试已入队，等待事件回放…"));
+    drawerState.events = [];
+    $("timeline").replaceChildren(el("div", "tl-cap", t("tl.retryQueued")));
     loadTask(drawerState.taskId);
-  } catch (e) { alert("重试失败：" + e.message); }
+  } catch (e) { alert(t("msg.retryFailed", { msg: e.message })); }
 }
 
 /* ---------------- 提交弹窗（含 OBS-2.5 Fork 蓝图） ---------------- */
@@ -510,7 +559,7 @@ function openSubmitDialog(tpl) {
   const f = $("submitForm");
   if (tpl) {
     submitState.blueprint = tpl.config || {};
-    $("submitDialogTitle").textContent = "📋 复制为新任务（可改参数，提交后为独立任务）";
+    $("submitDialogTitle").textContent = t("form.forkTitle");
     $("fQuery").value = tpl.query || "";
     const c = submitState.blueprint;
     setRadioMode(c.mode === "deep_research" ? "deep_research" : "flat");
@@ -525,7 +574,7 @@ function openSubmitDialog(tpl) {
     $("fRetriever").value = c.retriever || "";
   } else {
     submitState.blueprint = null;
-    $("submitDialogTitle").textContent = "提交新研究";
+    $("submitDialogTitle").textContent = t("form.title");
     f.reset(); // 回 HTML 默认（radio=deep、sectionWriting 勾选、数字默认值）
   }
   $("submitDialog").showModal();
@@ -594,7 +643,7 @@ async function submitResearch(ev) {
 
   const btn = $("fSubmit");
   btn.disabled = true;
-  btn.textContent = "提交中…";
+  btn.textContent = t("btn.submitting");
   try {
     const r = await j("POST", API, {
       query,
@@ -608,10 +657,10 @@ async function submitResearch(ev) {
     await loadTasks();
     openDrawer(r.taskId);           // 自动打开新任务抽屉，WS 直播其事件
   } catch (e) {
-    alert("提交失败：" + e.message);
+    alert(t("msg.submitFailed", { msg: e.message }));
   } finally {
     btn.disabled = false;
-    btn.textContent = "提交";
+    btn.textContent = t("btn.doSubmit");
   }
 }
 
@@ -623,7 +672,7 @@ async function openForkDialog() {
     const tpl = await j("GET", API + "/" + id + "/template");
     openSubmitDialog(tpl);
   } catch (e) {
-    alert("加载任务模板失败：" + e.message);
+    alert(t("msg.templateFailed", { msg: e.message }));
   }
 }
 
@@ -642,7 +691,7 @@ async function loadConfig() {
     renderConfig();
   } catch (e) {
     cfgRows = [];
-    $("configList").replaceChildren(el("div", "ev-none", "加载失败：" + e.message));
+    $("configList").replaceChildren(el("div", "ev-none", t("msg.cfgLoadFailed", { msg: e.message })));
   }
 }
 
@@ -653,24 +702,26 @@ function renderConfig() {
     const row = el("div", "cfg-row");
     const left = el("div");
     left.appendChild(el("div", "cfg-key", v.key));
-    left.appendChild(el("div", "cfg-desc", v.description));
+    // 服务端 description 是中文；前端按 key 映射本地文案，未命中则用服务端原文
+    left.appendChild(el("div", "cfg-desc", I18N.configDescription(v) || v.description));
 
     const state = el("div", "cfg-state" + (v.set ? " set" : ""),
-      v.set ? (v.secret ? "已设置 · v" + v.version : "已覆盖：" + trunc(v.value, 40) + " · v" + v.version)
-        : "未覆盖（内置默认）");
-    if (v.set && v.updatedAt) state.title = "更新于 " + fmtDate(v.updatedAt);
+      v.set ? (v.secret ? t("cfg.set", { version: v.version })
+        : t("cfg.overridden", { value: trunc(v.value, 40), version: v.version }))
+        : t("cfg.notOverridden"));
+    if (v.set && v.updatedAt) state.title = t("cfg.updatedAt", { time: fmtDate(v.updatedAt) });
 
     const editor = el("div", "cfg-editor");
     const input = document.createElement("input");
     input.type = v.secret ? "password" : "text";
     input.placeholder = v.secret
-      ? (v.set ? "已设置——输入新值以覆盖" : "输入 API Key")
+      ? (v.set ? t("cfg.phSecretSet") : t("cfg.phSecretNew"))
       : (v.set ? v.value : "");
     input.value = v.secret ? "" : (v.value || "");
     input.dataset.key = v.key;
-    const save = el("button", "btn", "保存");
+    const save = el("button", "btn", t("btn.save"));
     save.onclick = () => saveConfigRow(v, input);
-    const reset = el("button", "btn warn", "恢复默认");
+    const reset = el("button", "btn warn", t("btn.reset"));
     reset.disabled = !v.set;
     reset.onclick = () => resetConfigRow(v);
     editor.append(input, save, reset);
@@ -683,25 +734,25 @@ function renderConfig() {
 async function saveConfigRow(view, input) {
   const value = input.value.trim();
   if (view.secret) {
-    if (!value && view.set) { flashConfig("secret 留空 = 不改动（已设置）"); return; }
-    if (!value) { flashConfig("请输入 API Key"); return; }
+    if (!value && view.set) { flashConfig(t("cfg.secretBlank")); return; }
+    if (!value) { flashConfig(t("cfg.needKey")); return; }
   }
   try {
     const saved = await j("PUT", CONFIG_API + "/" + encodeURIComponent(view.key), { value });
-    flashConfig(view.key + " 已保存（v" + saved.version + "）——重启 worker 后生效");
+    flashConfig(t("cfg.saved", { key: view.key, version: saved.version }));
     await loadConfig();
   } catch (e) {
-    flashConfig("保存失败：" + e.message, true);
+    flashConfig(t("msg.saveFailed", { msg: e.message }), true);
   }
 }
 
 async function resetConfigRow(view) {
   try {
     await j("DELETE", CONFIG_API + "/" + encodeURIComponent(view.key));
-    flashConfig(view.key + " 已恢复内置默认——重启 worker 后生效");
+    flashConfig(t("cfg.resetDone", { key: view.key }));
     await loadConfig();
   } catch (e) {
-    flashConfig("失败：" + e.message, true);
+    flashConfig(t("msg.resetFailed", { msg: e.message }), true);
   }
 }
 
@@ -726,7 +777,32 @@ setInterval(() => {
 }, 4000);
 
 /* ---------------- 事件绑定 ---------------- */
+/* 切语言：从缓存重渲当前视图，**不调用任何 load*** ——
+ * 否则一次切换触发 6 个 API 调用，还会冲掉滚动位置与证据展开态。 */
+function rerenderAll() {
+  renderStats();
+  renderTasks(listState.lastTasks || []);
+  if (drawerState.task) {
+    renderDrawerHead(drawerState.task);
+    renderDrawerMeta(drawerState.task);
+  }
+  renderStageStrip();
+  rerenderTimeline();
+  if (drawerState.evidence) rerenderEvidence();
+  if (drawerState.reportChars !== null && drawerState.task) {
+    $("reportHint").textContent = t("rpt.loaded", { n: drawerState.reportChars });
+  }
+  if (cfgRows.length) renderConfig();
+  if (!submitState.blueprint) $("submitDialogTitle").textContent = t("form.title");
+}
+
 function bind() {
+  $("langSelect").value = I18N.lang;
+  $("langSelect").onchange = () => I18N.setLang($("langSelect").value);
+  I18N.onLangChange(() => {
+    $("langSelect").value = I18N.lang;
+    rerenderAll();
+  });
   $("submitBtn").onclick = () => openSubmitDialog(null);
   $("fCancel").onclick = () => $("submitDialog").close();
   $("submitForm").addEventListener("submit", submitResearch);
@@ -738,8 +814,8 @@ function bind() {
   $("cfgCopyCmd").onclick = () => {
     const cmd = $("cfgRestartCmd").textContent.trim();
     navigator.clipboard.writeText(cmd).then(
-      () => flashConfig("重启命令已复制"),
-      () => flashConfig("复制失败，请手动选择复制", true));
+      () => flashConfig(t("cfg.copied")),
+      () => flashConfig(t("cfg.copyFailed"), true));
   };
   $("statusFilter").onchange = () => {
     listState.status = $("statusFilter").value;

@@ -440,7 +440,10 @@ $PrivateRefPatterns = @(
 #    开发树永远暴露不了这个（它有 .git）—— 只有真在发布树上跑一次才会发现。
 $skipNames = @('BUILD.md', 'docker-compose.yml', 'scripts/check-readability.ps1')
 if (Test-Path (Join-Path $Root '.git')) {
-    $privateRefFiles = @(& git -C $Root ls-files)
+    # 同时纳入**未跟踪但未被忽略**的文件：否则新增文件在 `git add` 之前是门禁盲区。
+    # 2026-09-21 实测：新写的 dashboard/i18n.js 里的私有引用就这样躲过了首轮检查。
+    $privateRefFiles = @(& git -C $Root ls-files) +
+        @(& git -C $Root ls-files --others --exclude-standard)
 } else {
     $privateRefFiles = @(Get-ChildItem -Path $Root -Recurse -File |
         Where-Object { $_.FullName -notmatch '\\(\.git|target|node_modules|__pycache__|\.mvn|\.idea)\\' } |
