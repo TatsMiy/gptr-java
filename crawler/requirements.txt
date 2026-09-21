@@ -1,0 +1,31 @@
+# gptr-pycrawler 依赖（自 gpt-researcher 提取精简，Apache-2.0）
+# 可选依赖见文末注释：镜像默认只装主链路 + 学术源，重型后端按需自行安装。
+
+# API 框架
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
+
+# 抓取主链（bs 后端）
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0
+colorama>=0.4
+
+# PDF 抓取后端（.pdf/学术 PDF，主链推荐）
+pymupdf>=1.24
+
+# 零 key 搜索引擎（默认 duckduckgo）
+ddgs>=8.0
+
+# 学术源（免 key 公开 API）
+arxiv>=2.1
+
+# ---- 可选依赖（选中对应检索器/抓取后端时才需要，镜像默认不装）----
+tavily-python>=0.5    # tavily 检索/抓取（key 走观测台配置或 TAVILY_API_KEY）
+exa-py>=1.0           # exa 检索（key 走观测台配置或 EXA_API_KEY）
+# firecrawl-py         # firecrawl 抓取后端（需 FIRECRAWL_API_KEY）
+# selenium             # browser 抓取后端（js 渲染，需本机 chrome）
+# browser_cookie3      # browser 后端反爬 cookie 注入
+# zendriver            # nodriver 抓取后端（js 渲染，需本机浏览器）
+# langchain-community  # web_base_loader 抓取后端

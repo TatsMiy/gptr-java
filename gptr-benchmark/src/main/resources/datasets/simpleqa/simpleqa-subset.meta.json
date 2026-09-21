@@ -1,0 +1,22 @@
+{
+  "dataset": "OpenAI SimpleQA official test set",
+  "source": "https://openaipublic.blob.core.windows.net/simple-evals/simple_qa_test_set.csv",
+  "source_sha256": "feee3f7e7db3617e94e8fcf1977b756ec420ef8568f4e0fcbbe0e92e9d5fc032",
+  "total_rows": 4326,
+  "subset_size": 24,
+  "seed": 20260905,
+  "method": "topic-stratified round-robin (topic from metadata python-literal), then stable-sorted by official row number",
+  "topics_covered": 10,
+  "topics": [
+    "Art",
+    "Geography",
+    "History",
+    "Music",
+    "Other",
+    "Politics",
+    "Science and technology",
+    "Sports",
+    "TV shows",
+    "Video games"
+  ]
+}

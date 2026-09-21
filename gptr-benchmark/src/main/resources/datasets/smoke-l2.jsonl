@@ -1,0 +1,2 @@
+{"id": "rec-flat-01", "query": "2025 年 ACM 图灵奖授予了哪两位科学家？他们因何贡献获奖？", "mode": "flat", "lang": "zh", "cat": "recency", "gold": "Charles H. Bennett 和 Gilles Brassard（量子信息与量子密码学奠基）", "superseded": "Andrew G. Barto 和 Richard S. Sutton（2024 年 ACM 图灵奖得主，强化学习领域）", "blocked": ["amturing.acm.org"]}
+{"id": "rec-deep-02", "query": "2025 年诺贝尔化学奖授予了哪三位科学家？", "mode": "deep", "lang": "zh", "cat": "recency", "gold": "Omar M. Yaghi、Susumu Kitagawa、Richard Robson（金属有机框架 MOF 的开发）", "superseded": "David Baker、Demis Hassabis、John M. Jumper（2024 年诺贝尔化学奖得主，蛋白质设计与结构预测）"}

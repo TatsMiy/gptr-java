@@ -1,0 +1,17 @@
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
+.env
+outputs/
+results/
+*.bundle
+
+# Python 构建产物（2026-09-06 清扫批曾误入 71 个 .pyc）
+__pycache__/
+*.pyc

@@ -1,0 +1,78 @@
+# gptr-java — 本地基础设施（Postgres + MinIO + 爬虫服务）
+#
+# 启动：  docker compose up -d --build
+# 停止：  docker compose down          （保留数据卷）
+# 清空：  docker compose down -v       （删除数据卷）
+#
+# 可选配置写在同目录的 .env（不入库；模板见 .env.example）：
+#   BOCHA_API_KEY        博查（Bocha）Web Search key —— 国内直连、免代理，评测首选检索源
+#   HTTP_PROXY/HTTPS_PROXY  抓取出网代理（留空 = 直连）
+#
+# 构建上下文是仓库内的相对路径 ./crawler，克隆后即可构建，无外部依赖。
+# 中国大陆网络可用 --build-arg 覆盖镜像源，见 crawler/Dockerfile 顶部说明。
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gptr-postgres
+    environment:
+      POSTGRES_USER: gptr
+      POSTGRES_PASSWORD: gptr
+      POSTGRES_DB: gptr
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gptr -d gptr"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: gptr-minio
+    command: server /data --console-address ":9001"
+    environment:
+      # 仅本地开发用的固定凭据；对公网暴露前请务必更换。
+      MINIO_ROOT_USER: gptr
+      MINIO_ROOT_PASSWORD: gptr12345
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web 控制台
+    volumes:
+      - miniodata:/data
+
+  # Python 无状态爬虫服务（仓库内子目录 ./crawler，自包含构建）
+  # 开发期暴露 127.0.0.1:8000（Java worker 在宿主运行）；生产可改为仅内部网络。
+  crawler:
+    build:
+      context: ./crawler
+    container_name: gptr-crawler
+    environment:
+      # 出网代理（可选）：部分站点抓取时可能需要；检索走博查，为国内直连、不受影响。
+      # 留空 = 直连。三项留空即可，无需任何本机特定地址。
+      DDG_PROXY: "${DDG_PROXY:-}"
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      # NO_PROXY 必须包含 bochaai.com，否则检索请求会绕代理而显著变慢。
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,.local,bochaai.com,gptr-crawler,gptr-postgres,gptr-minio}"
+      # 博查（Bocha）Web Search key（可选）：国内直连、无需代理、无反爬。
+      # 限速：Tier 0（￥0）QPS=1 / QPM=30 / QPD=1000；检索器内置进程级节流器，
+      # 保证两次「发起」间隔 ≥ BOCHA_MIN_INTERVAL（流水线式，不阻塞响应）。
+      # 留空 ⇒ 该检索器不可用；仍可使用零 key 的其它检索源。
+      BOCHA_API_KEY: "${BOCHA_API_KEY:-}"
+      BOCHA_MIN_INTERVAL: "${BOCHA_MIN_INTERVAL:-1.05}"
+    ports:
+      - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux 宿主机也可解析（Docker Desktop 自带）
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+  miniodata:

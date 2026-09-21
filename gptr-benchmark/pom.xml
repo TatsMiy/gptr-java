@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.gptr</groupId>
+        <artifactId>gptr-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>gptr-benchmark</artifactId>
+    <name>gptr-benchmark</name>
+    <description>Research quality benchmark: run tasks through the real pipeline and judge report quality (P1)</description>
+
+    <dependencies>
+        <!-- 复用 CitationVerifier（canonical URL 核验） -->
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- jackson（题集/任务 JSON/判分解析） -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 一键跑： mvn -pl gptr-benchmark exec:java
+                 警告：默认主类是 BenchmarkMain（跑 datasets/benchmark.jsonl 并逐题提交研究任务）。
+                 2026-09-13 事故：把 CompareMain 的那组参数（set/dir/out）传给 exec:java，
+                 BenchmarkMain 静默忽略，退回默认 47 题题集，误提交十余个研究任务。
+                 要跑报告盲判请用 exec:java@compare（或 scripts/run_compare.ps1）。 -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <mainClass>com.gptr.benchmark.BenchmarkMain</mainClass>
+                </configuration>
+                <executions>
+                    <!-- 安全入口：mvn -pl gptr-benchmark exec:java@compare -->
+                    <execution>
+                        <id>compare</id>
+                        <goals>
+                            <goal>java</goal>
+                        </goals>
+                        <configuration>
+                            <mainClass>com.gptr.benchmark.CompareMain</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

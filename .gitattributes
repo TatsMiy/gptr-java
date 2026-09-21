@@ -1,0 +1,15 @@
+# 统一文本换行符：开发树 / git archive 导出树 / 各平台检出，三者逐字节一致。
+#
+# 为什么需要这个文件：本仓 core.autocrlf=true，检出时 git 会把工作区的文本文件换成 CRLF。
+# 实测（2026-09-21）：跟踪文件里索引 blob **全是 LF**，但工作区已有 **94 个文件是 CRLF**；
+# 而发布树是 `git archive` 导出的 blob 原文（LF）。两者直接比哈希会出现成片假 DIFF，
+# 让"发布树是否同步"这个判断失去可信度。钉死 eol=lf 之后，工作区与导出树同源。
+#
+# 为什么敢全仓 LF：本仓没有 .bat/.cmd/.sh（唯一 EOL 敏感的 scripts/check-readability.ps1
+# 对 LF 无要求），其余是 .java/.py/.md/.yml/.json/.properties/.xml —— 都不在乎。
+#
+# 验证命令：
+#   git ls-files --eol | Select-String 'w/crlf'   # 重新检出后应无输出
+#   git status --porcelain                        # 加本文件后应无输出（无需 --renormalize）
+#   git ls-files --eol | Select-String 'i/crlf'   # 索引里不应有 CRLF blob
+* text=auto eol=lf

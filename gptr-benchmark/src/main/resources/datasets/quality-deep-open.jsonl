@@ -1,0 +1,10 @@
+{"id": "zh-open-01-deep", "query": "谈谈深度学习中的注意力机制（Attention）及其在自然语言处理中的应用。", "mode": "deep", "lang": "zh"}
+{"id": "zh-open-02-deep", "query": "介绍量子计算的基本原理、主要技术路线与当前发展现状。", "mode": "deep", "lang": "zh"}
+{"id": "zh-open-03-deep", "query": "综述可再生能源（太阳能与风能）的技术原理与经济性现状。", "mode": "deep", "lang": "zh"}
+{"id": "zh-open-04-deep", "query": "讨论大语言模型的幻觉（hallucination）问题及其主流缓解方法。", "mode": "deep", "lang": "zh"}
+{"id": "zh-open-05-deep", "query": "介绍 CRISPR 基因编辑技术的原理、应用与伦理争议。", "mode": "deep", "lang": "zh"}
+{"id": "en-open-01-deep", "query": "Explain how the transformer architecture works and why it revolutionized natural language processing.", "mode": "deep", "lang": "en"}
+{"id": "en-open-02-deep", "query": "Discuss the main causes and impacts of climate change, with evidence.", "mode": "deep", "lang": "en"}
+{"id": "en-open-03-deep", "query": "What are the main technical approaches to autonomous driving and their current state of deployment?", "mode": "deep", "lang": "en"}
+{"id": "en-open-04-deep", "query": "Explain the difference between TCP and UDP, and when each protocol is preferred.", "mode": "deep", "lang": "en"}
+{"id": "en-open-05-deep", "query": "Discuss the history, achievements and significance of the Apollo space program.", "mode": "deep", "lang": "en"}

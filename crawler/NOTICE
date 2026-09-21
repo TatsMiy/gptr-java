@@ -1,0 +1,15 @@
+# gptr-pycrawler NOTICE
+
+This project includes code extracted from
+gpt-researcher (https://github.com/assafelovic/gpt-researcher),
+Copyright (c) Assaf Elovic and contributors,
+licensed under the Apache License, Version 2.0.
+
+Extracted portions:
+- pycrawler/retrievers/  (search engine adapters)
+- pycrawler/scraper/     (web scraping backends)
+- pycrawler/utils/       (workers, rate_limiter, url_security)
+- retriever_factory.py   (derived from actions/retriever.py)
+
+All extracted files retain their original copyright headers.
+Apache License 2.0 text: see LICENSE.

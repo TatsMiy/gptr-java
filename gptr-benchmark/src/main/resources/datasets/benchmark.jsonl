@@ -1,0 +1,47 @@
+{"id": "zh-fact-01", "query": "珠穆朗玛峰的海拔高度是多少米？请给出权威测量值。", "mode": "flat", "lang": "zh", "gold": "8848.86米", "superseded": "8844.43米（2005 年公布的岩面高程，2020 年前官方值）"}
+{"id": "zh-fact-02", "query": "中华人民共和国成立于哪一年？", "mode": "flat", "lang": "zh", "gold": "1949年"}
+{"id": "zh-fact-03", "query": "《红楼梦》的作者是谁？", "mode": "flat", "lang": "zh", "gold": "曹雪芹"}
+{"id": "zh-fact-04", "query": "中国最长的河流是哪一条？", "mode": "flat", "lang": "zh", "gold": "长江"}
+{"id": "zh-fact-05", "query": "光在真空中的传播速度约为每秒多少公里？", "mode": "flat", "lang": "zh", "gold": "约30万公里（299792公里/秒）"}
+{"id": "en-fact-01", "query": "Who wrote the play Romeo and Juliet?", "mode": "flat", "lang": "en", "gold": "William Shakespeare"}
+{"id": "en-fact-02", "query": "What is the capital city of Australia?", "mode": "flat", "lang": "en", "gold": "Canberra"}
+{"id": "en-fact-03", "query": "In which year did World War II end?", "mode": "flat", "lang": "en", "gold": "1945"}
+{"id": "en-fact-04", "query": "What is the chemical symbol for gold?", "mode": "flat", "lang": "en", "gold": "Au"}
+{"id": "en-fact-05", "query": "How many planets are in our solar system?", "mode": "flat", "lang": "en", "gold": "8"}
+{"id": "zh-open-01", "query": "谈谈深度学习中的注意力机制（Attention）及其在自然语言处理中的应用。", "mode": "flat", "lang": "zh"}
+{"id": "zh-open-02", "query": "介绍量子计算的基本原理、主要技术路线与当前发展现状。", "mode": "flat", "lang": "zh"}
+{"id": "zh-open-03", "query": "综述可再生能源（太阳能与风能）的技术原理与经济性现状。", "mode": "flat", "lang": "zh"}
+{"id": "zh-open-04", "query": "讨论大语言模型的幻觉（hallucination）问题及其主流缓解方法。", "mode": "flat", "lang": "zh"}
+{"id": "zh-open-05", "query": "介绍 CRISPR 基因编辑技术的原理、应用与伦理争议。", "mode": "flat", "lang": "zh"}
+{"id": "en-open-01", "query": "Explain how the transformer architecture works and why it revolutionized natural language processing.", "mode": "flat", "lang": "en"}
+{"id": "en-open-02", "query": "Discuss the main causes and impacts of climate change, with evidence.", "mode": "flat", "lang": "en"}
+{"id": "en-open-03", "query": "What are the main technical approaches to autonomous driving and their current state of deployment?", "mode": "flat", "lang": "en"}
+{"id": "en-open-04", "query": "Explain the difference between TCP and UDP, and when each protocol is preferred.", "mode": "flat", "lang": "en"}
+{"id": "en-open-05", "query": "Discuss the history, achievements and significance of the Apollo space program.", "mode": "flat", "lang": "en"}
+{"id": "deep-fact-01", "query": "中国第一位进入太空的航天员是谁？", "mode": "deep", "lang": "zh", "gold": "杨利伟"}
+{"id": "deep-fact-02", "query": "DNA 的双螺旋结构是由哪两位科学家提出的？", "mode": "deep", "lang": "zh", "gold": "沃森（James Watson）和克里克（Francis Crick）"}
+{"id": "deep-fact-03", "query": "日本的首都是哪座城市？", "mode": "deep", "lang": "zh", "gold": "东京"}
+{"id": "deep-fact-04", "query": "世界上国土面积最大的国家是哪一个？", "mode": "deep", "lang": "zh", "gold": "俄罗斯"}
+{"id": "deep-fact-05", "query": "圆周率 π 的近似值是多少（保留两位小数）？", "mode": "deep", "lang": "zh", "gold": "3.14"}
+{"id": "deep-fact-06", "query": "Who painted the Mona Lisa?", "mode": "deep", "lang": "en", "gold": "Leonardo da Vinci"}
+{"id": "deep-fact-07", "query": "What is the largest ocean on Earth?", "mode": "deep", "lang": "en", "gold": "Pacific Ocean"}
+{"id": "deep-fact-08", "query": "In which year was the first iPhone released?", "mode": "deep", "lang": "en", "gold": "2007"}
+{"id": "deep-fact-09", "query": "What is the boiling point of water at sea level in degrees Celsius?", "mode": "deep", "lang": "en", "gold": "100"}
+{"id": "deep-fact-10", "query": "Which planet is known as the Red Planet?", "mode": "deep", "lang": "en", "gold": "Mars"}
+{"id": "deep-open-01", "query": "深入分析区块链技术的核心原理、主流共识机制及其在金融领域之外的应用前景。", "mode": "deep", "lang": "zh"}
+{"id": "deep-open-02", "query": "从原理、临床疗效与争议三个方面综述 mRNA 疫苗技术。", "mode": "deep", "lang": "zh"}
+{"id": "deep-open-03", "query": "探讨图神经网络（GNN）的基本思想及其在推荐系统中的应用。", "mode": "deep", "lang": "zh"}
+{"id": "deep-open-04", "query": "分析 5G 与 6G 通信的关键差异与未来演进方向。", "mode": "deep", "lang": "zh"}
+{"id": "deep-open-05", "query": "综述脑机接口（BCI）技术的原理、临床进展与伦理挑战。", "mode": "deep", "lang": "zh"}
+{"id": "deep-open-06", "query": "Analyze the economic and geopolitical implications of the global semiconductor supply chain.", "mode": "deep", "lang": "en"}
+{"id": "deep-open-07", "query": "Explain the theory of evolution by natural selection and summarize the main lines of evidence supporting it.", "mode": "deep", "lang": "en"}
+{"id": "deep-open-08", "query": "Discuss the main challenges and current approaches in achieving nuclear fusion energy.", "mode": "deep", "lang": "en"}
+{"id": "deep-open-09", "query": "Compare classical cryptography and quantum cryptography approaches.", "mode": "deep", "lang": "en"}
+{"id": "deep-open-10", "query": "Examine the rapid rise of large language models and their societal opportunities and risks.", "mode": "deep", "lang": "en"}
+{"id": "rec-flat-01", "query": "2025 年 ACM 图灵奖授予了哪两位科学家？他们因何贡献获奖？", "mode": "flat", "lang": "zh", "cat": "recency", "gold": "Charles H. Bennett 和 Gilles Brassard（量子信息与量子密码学奠基）", "superseded": "Andrew G. Barto 和 Richard S. Sutton（2024 年 ACM 图灵奖得主，强化学习领域）", "blocked": ["amturing.acm.org"]}
+{"id": "rec-flat-02", "query": "Who received the 2025 ACM Turing Award?", "mode": "flat", "lang": "en", "cat": "recency", "gold": "Charles H. Bennett and Gilles Brassard", "superseded": "Andrew G. Barto and Richard S. Sutton (2024 ACM Turing Award winners, reinforcement learning)"}
+{"id": "rec-flat-03", "query": "2025 年诺贝尔物理学奖授予了哪三位科学家？他们因什么发现获奖？", "mode": "flat", "lang": "zh", "cat": "recency", "gold": "John M. Martinis、Michel Devoret、John Clarke（电路中宏观量子隧穿与能量量子化的发现）", "superseded": "John Hopfield 和 Geoffrey Hinton（2024 年诺贝尔物理学奖得主，机器学习与人工神经网络）", "blocked": ["nobelprize.org"]}
+{"id": "rec-deep-01", "query": "Who were awarded the 2025 Nobel Prize in Physics, and for which discovery?", "mode": "deep", "lang": "en", "cat": "recency", "gold": "John M. Martinis, Michel Devoret and John Clarke (macroscopic quantum tunnelling in electric circuits)", "superseded": "John Hopfield and Geoffrey Hinton (2024 Nobel Prize in Physics winners, machine learning with artificial neural networks)"}
+{"id": "rec-deep-02", "query": "2025 年诺贝尔化学奖授予了哪三位科学家？", "mode": "deep", "lang": "zh", "cat": "recency", "gold": "Omar M. Yaghi、Susumu Kitagawa、Richard Robson（金属有机框架 MOF 的开发）", "superseded": "David Baker、Demis Hassabis、John M. Jumper（2024 年诺贝尔化学奖得主，蛋白质设计与结构预测）"}
+{"id": "rec-deep-03", "query": "Who won the 2025 Nobel Prize in Chemistry and for what contribution?", "mode": "deep", "lang": "en", "cat": "recency", "gold": "Omar M. Yaghi, Susumu Kitagawa and Richard Robson (metal-organic frameworks)", "superseded": "David Baker, Demis Hassabis and John M. Jumper (2024 Nobel Prize in Chemistry winners, computational protein design and structure prediction)"}
+{"id": "rec-flat-05", "query": "What is the current official elevation of Mount Everest?", "mode": "flat", "lang": "en", "cat": "recency", "gold": "8,848.86 m (2020 joint China-Nepal announcement)", "superseded": "8,844.43 m (2005 rock-height elevation, previous official value)"}

@@ -1,0 +1,22 @@
+# gptr-java NOTICE
+
+gptr-java is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This project draws direct architectural and prompt inspiration from
+[gpt-researcher](https://github.com/assafelovic/gpt-researcher),
+Copyright (c) Assaf Elovic and contributors, licensed under the Apache License, Version 2.0.
+
+Attribution notes:
+
+- `gptr-engine/src/main/resources/prompts/deep-research.properties`
+  contains prompt assets derived from gpt-researcher (Apache-2.0). They were
+  adapted for the Java/LangGraph4j pipeline.
+- The `crawler/` directory is a self-contained, stateless Python crawler
+  service extracted and simplified from gpt-researcher. It carries its own
+  LICENSE and NOTICE files (see `crawler/LICENSE`, `crawler/NOTICE`).
+- Report structure, recursion and guard concepts follow the open deep-research
+  literature and the original gpt-researcher design; see repository docs for
+  the per-feature design records.
+
+All other code is original to this project.
+Apache License 2.0 text: see LICENSE.

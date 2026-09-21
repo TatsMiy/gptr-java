@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: gptr-worker
+  datasource:
+    url: jdbc:postgresql://localhost:5432/gptr
+    username: gptr
+    password: gptr
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+worker:
+  concurrency: 4
+  poll-interval-ms: 2000
+  reap-interval-ms: 30000
+  lease-seconds: 300
+
+gptr:
+  clients:
+    # LLM provider：mock（默认，行为由 llm-mode 驱动）| openai（OpenAI 兼容，默认 DeepSeek，需 DEEPSEEK_API_KEY）
+    llm-provider: mock
+    llm-mode: ok          # mock 模式行为：ok / transient-then-ok / quota / permanent
+    llm-base-url: https://api.deepseek.com
+    llm-model: deepseek-chat
+    # Python 爬虫服务（E1：/search /scrape；Docker 容器暴露 127.0.0.1:8000）
+    crawler-base-url: http://127.0.0.1:8000
+    # 检索降级链：无 mode = 真实源（python 优先，duckduckgo 零 key 作降级）；name:mode = mock
+    search-chain: "python,duckduckgo"
+
+  # M4：Webhook 投递（HMAC-SHA256 签名 + 指数退避重试）
+  webhook:
+    secret: "gptr-dev-secret"
+    max-attempts: 5
+    backoff-base-ms: 1000
+    poll-interval-ms: 2000
+
+  # 报告产物存储
+  storage:
+    type: local            # local | minio
+    local-dir: ./outputs
+    minio:
+      endpoint: http://localhost:9000
+      access-key: gptr
+      secret-key: gptr12345
+      bucket: gptr-reports

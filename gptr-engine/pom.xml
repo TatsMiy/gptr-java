@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.gptr</groupId>
+        <artifactId>gptr-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>gptr-engine</artifactId>
+    <name>gptr-engine</name>
+    <description>Research engine: five-stage pipeline (plan/search/scrape/summarize/write) (E series)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-integration</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <!-- ObjectMapper（LLM JSON 响应解析、结构化输出） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+        <!-- Jsoup：DuckDuckGo 结果页解析 + 网页抓取（E1 用解析，E2 用抓取） -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.18.1</version>
+        </dependency>
+
+        <!-- LangGraph4j：deep research 图编排（E-PoC 验证） -->
+        <dependency>
+            <groupId>org.bsc.langgraph4j</groupId>
+            <artifactId>langgraph4j-core</artifactId>
+            <version>1.8.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 真实适配器测试用 JDK 内置 HttpServer 模拟 HTTP（零依赖，无需真 key） -->
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <excludedGroups>integration</excludedGroups>
+                </configuration>
+            </plugin>
+            <!-- 产出 test-jar：把测试工具（testsupport/IntegrationDbGuard）供 api/worker 的
+                 集成测试复用，避免同一护栏在三处各写一份而漂移。
+                 ⚠️ test-jar 在 package 阶段产出，而 `mvn test` 不跨阶段 ⇒ 消费方**只在
+                 integration profile 里**声明该依赖（见 api/worker 的 pom），
+                                  使日常 `mvn test` 完全不受影响。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>integration</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups combine.self="override">integration</groups>
+                            <excludedGroups combine.self="override"/>
+                            <argLine combine.self="override">-XX:+EnableDynamicAgentLoading</argLine>
+                            <!-- 集成测试连独立库 gptr_test（避免其 TRUNCATE 清空开发库 gptr）：
+                                 先建库 CREATE DATABASE gptr_test OWNER gptr; 表由 Flyway 迁移 -->
+                            <systemPropertyVariables>
+                                <spring.datasource.url>jdbc:postgresql://localhost:5432/gptr_test</spring.datasource.url>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

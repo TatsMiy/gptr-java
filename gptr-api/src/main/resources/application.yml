@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: gptr-api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/gptr
+    username: gptr
+    password: gptr
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+# OBS-2：报告读取（与 worker 同键；worker 写 api 读）
+gptr:
+  storage:
+    type: local            # local | minio
+    local-dir: ./outputs
+    minio:
+      endpoint: http://localhost:9000
+      access-key: gptr
+      secret-key: gptr12345
+      bucket: gptr-reports

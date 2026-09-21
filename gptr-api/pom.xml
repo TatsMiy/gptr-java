@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.gptr</groupId>
+        <artifactId>gptr-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>gptr-api</artifactId>
+    <name>gptr-api</name>
+    <description>REST API: submit/query/cancel/retry research tasks (M2)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- OBS-2：报告读取复用 ReportStorage（local/minio 抽象） -->
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-integration</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- WebSocket：任务事件实时订阅（M4） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+            <!-- engine 的 test-jar：复用 com.gptr.engine.testsupport.IntegrationDbGuard
+             （"我连的是测试库吗"护栏）。
+             放在顶层依赖而非 integration profile：api/worker 的集成测试类**总会被编译**
+             （@Tag 只影响执行），无条件声明才能让日常 `mvn test` 也编译通过；
+             test-jar 在 package 阶段产出，Maven reactor 会为此自动把 gptr-engine 推进到
+             package（2026-09-20 实测：删掉本地 test-jar 后 `-pl gptr-worker -am test` 仍 SUCCESS）。 -->
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-engine</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <excludedGroups>integration</excludedGroups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>integration</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <groups combine.self="override">integration</groups>
+                            <excludedGroups combine.self="override"/>
+                            <argLine combine.self="override">-XX:+EnableDynamicAgentLoading</argLine>
+                            <!-- 集成测试连独立库 gptr_test（避免其 TRUNCATE 清空开发库 gptr）：
+                                 先建库 CREATE DATABASE gptr_test OWNER gptr; 表由 Flyway 迁移 -->
+                            <systemPropertyVariables>
+                                <spring.datasource.url>jdbc:postgresql://localhost:5432/gptr_test</spring.datasource.url>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

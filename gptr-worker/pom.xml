@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.gptr</groupId>
+        <artifactId>gptr-java</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>gptr-worker</artifactId>
+    <name>gptr-worker</name>
+    <description>Task queue consumer: dequeue, lease, engine loop, checkpoint (M2)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-integration</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-engine</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <!-- ObjectMapper（Mock 引擎解析任务 config JSON） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- 测试：单测 + Awaitility（集成测试连接 docker compose 的本地 Postgres，无需 Testcontainers） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+            <!-- engine 的 test-jar：复用 com.gptr.engine.testsupport.IntegrationDbGuard
+             （"我连的是测试库吗"护栏）。
+             放在顶层依赖而非 integration profile：api/worker 的集成测试类**总会被编译**
+             （@Tag 只影响执行），无条件声明才能让日常 `mvn test` 也编译通过；
+             test-jar 在 package 阶段产出，Maven reactor 会为此自动把 gptr-engine 推进到
+             package（2026-09-20 实测：删掉本地 test-jar 后 `-pl gptr-worker -am test` 仍 SUCCESS）。 -->
+        <dependency>
+            <groupId>com.gptr</groupId>
+            <artifactId>gptr-engine</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- JDK 21+ 需显式允许动态代理加载（ByteBuddy/Mockito self-attach） -->
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <!-- 默认排除集成测试（需本地 Postgres）；用 -Pintegration 显式运行 -->
+                    <excludedGroups>integration</excludedGroups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>integration</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <!-- combine.self=override：确保覆盖默认的 excludedGroups，而非合并 -->
+                            <groups combine.self="override">integration</groups>
+                            <excludedGroups combine.self="override"/>
+                            <argLine combine.self="override">-XX:+EnableDynamicAgentLoading</argLine>
+                            <!-- 集成测试连**独立库** gptr_test：
+                                 main 的 application.yml 指向开发库 gptr，而各集成测试在 @BeforeEach 里
+                                 TRUNCATE tasks / graph_checkpoints ⇒ 不隔离会清空开发库的任务记录与
+                                 checkpoint（连带 /tasks/{id}/evidence 的历史查询能力）——2026-09-20 实测。
+                                 先建库：CREATE DATABASE gptr_test OWNER gptr;（表由 Flyway 自动迁移） -->
+                            <systemPropertyVariables>
+                                <spring.datasource.url>jdbc:postgresql://localhost:5432/gptr_test</spring.datasource.url>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>
