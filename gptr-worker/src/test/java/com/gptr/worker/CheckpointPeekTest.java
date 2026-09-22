@@ -23,7 +23,7 @@ class CheckpointPeekTest {
     @Test
     void peek() throws Exception {
         String thread = System.getProperty("peek.thread", "");
-        // 用 assumeTrue 而非 return（2026-09-14 修复）：return 会让 `mvn test` 把本类报成
+        // 必须用 assumeTrue 而非 return：return 会让 `mvn test` 把本类报成
         // PASS 且断言数为 0 的"假绿"，掩盖"诊断其实没跑"这一事实。本类是 worker 模块唯一
         // 不带 @Tag("integration") 的测试，常规 mvn test 下唯一会执行的就是它 —— 假绿代价最大。
         Assumptions.assumeTrue(Boolean.getBoolean("peek.on") && !thread.isBlank(),
@@ -113,7 +113,7 @@ class CheckpointPeekTest {
                     int maxPerUrl = urlCount.values().stream().mapToInt(Integer::intValue).max().orElse(0);
                     say(sb, "[peek] max notes from a single URL = " + maxPerUrl
                             + "  (预算 maxPerUrl 只约束 LLM 提炼路径，直通路径不设限)");
-                    // 测量（2026-09-13）：来源不均的根因判定——每个来源的 note 数 + 内容样本。
+                    // 测量：来源不均的根因判定——每个来源的 note 数 + 内容样本。
                     // 目的：区分「长文综述产出多句」/「短页只产 1 句」/「检索噪声」
                     say(sb, "[peek] per-URL: note 数 | 域名 | 首条 insight 样本（判断来源性质）:");
                     var byUrl = new java.util.LinkedHashMap<String, java.util.List<String>>();

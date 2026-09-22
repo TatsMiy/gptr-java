@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
   * 抓取配额（联动公式 + 组轮转）与维度覆盖（机械下界）。
  *
  * <p>覆盖的判定逻辑全部机械：配额是纯函数、轮转是纯函数、维度"是否有查询"由结构回答。
- * 这三处正是批 2 暴露问题的修复点（抓取名额被前几条查询吃满、覆盖判定随机）。
+ * 这三处正是"名额被前几条查询吃满、覆盖判定随机"的修复点（抓取名额被前几条查询吃满、覆盖判定随机）。
  */
-class Batch4PreTest {
+class ScrapeQuotaAndCoverageTest {
 
     // ---------------------------------------------------------------
     // A. 抓取配额：「配额公式边界」
@@ -38,7 +38,7 @@ class Batch4PreTest {
         assertEquals(8, q.quotaFor(3), "2×3=6 → 保底 8（与现状一致，成本不降不升）");
         assertEquals(8, q.quotaFor(4), "2×4=8 → 命中");
         assertEquals(10, q.quotaFor(5));
-        assertEquals(12, q.quotaFor(6), "批 2 legacy 补查到 6 组时的配额");
+        assertEquals(12, q.quotaFor(6), "legacy 补查到 6 组时的配额");
         assertEquals(16, q.quotaFor(9), "2×9=18 → 封顶 16");
         assertEquals(16, q.quotaFor(50), "极端组数仍封顶");
         assertEquals(8, q.quotaFor(0), "组数为 0 → 不崩，取下界");
@@ -53,7 +53,7 @@ class Batch4PreTest {
     }
 
     private static List<String> group(String... urls) {
-        return java.util.Arrays.stream(urls).map(Batch4PreTest::item).toList();
+        return java.util.Arrays.stream(urls).map(ScrapeQuotaAndCoverageTest::item).toList();
     }
 
     @Test
@@ -102,7 +102,7 @@ class Batch4PreTest {
 
     @Test
     void roundRobinDedupesSameArticleMirrors() {
-        // q08 实测形态（2026-09-13）：组 0 的五条命中里三条是**同一篇 163 文章**的不同入口
+        // q08 实测形态：组 0 的五条命中里三条是**同一篇 163 文章**的不同入口
         // （共享文号 KN6E4VRB0511AQHO，见 SourceMirror）。此前它们各占一个名额，
         // 导致该文号在素材中产出 40 条重复 note；去重后只占 1 个名额，省下的名额顺延给
         // 组内真实不同的来源。
@@ -258,7 +258,7 @@ class Batch4PreTest {
         String plan = "{\"dimensions\":[{\"dimension\":\"A\",\"queries\":[\"q1\",\"q2\"]},"
                 + "{\"dimension\":\"B\",\"queries\":[\"q3\"]}]}";
         ScriptedLlm llm = new ScriptedLlm(plan, "{\"queries\":[{\"query\":\"unused\"}]}");
-        Map<String, Object> out = GenerateQueriesNode.realGenerateQueries(llm, c -> { }, "dimensions").apply(state(3)).join();
+        Map<String, Object> out = GenerateQueriesNode.runGenerateQueries(state(3), llm, c -> { }, "dimensions");
         assertEquals(1, llm.calls, "每维度都有查询且总数 ≥ breadth → 不补齐（省一次调用）");
         assertEquals(List.of("q1", "q2", "q3"), queriesOf(out));
         assertEquals(2, ((List<String>) out.get("dimensions")).size(), "维度清单入状态键");
@@ -270,7 +270,7 @@ class Batch4PreTest {
                 + "{\"dimension\":\"安全与幻觉\",\"queries\":[]}]}";
         ScriptedLlm llm = new ScriptedLlm(plan,
                 "{\"queries\":[{\"query\":\"q2\"},{\"query\":\"q3\"}]}");
-        Map<String, Object> out = GenerateQueriesNode.realGenerateQueries(llm, c -> { }, "dimensions").apply(state(3)).join();
+        Map<String, Object> out = GenerateQueriesNode.runGenerateQueries(state(3), llm, c -> { }, "dimensions");
         assertEquals(2, llm.calls, "有维度缺查询 → 恰好补一次");
         assertTrue(llm.secondUser.contains("安全与幻觉"), "补齐入参必须点名缺失维度");
         assertEquals(List.of("q1", "q2", "q3"), queriesOf(out), "补齐查询并入列表");
@@ -282,14 +282,14 @@ class Batch4PreTest {
         String plan = "{\"dimensions\":[{\"dimension\":\"A\",\"queries\":[\"q1\"]},"
                 + "{\"dimension\":\"B\",\"queries\":[\"q2\"]}]}";
         ScriptedLlm llm = new ScriptedLlm(plan, "{\"queries\":[{\"query\":\"q3\"}]}");
-        Map<String, Object> out = GenerateQueriesNode.realGenerateQueries(llm, c -> { }, "dimensions").apply(state(3)).join();
+        Map<String, Object> out = GenerateQueriesNode.runGenerateQueries(state(3), llm, c -> { }, "dimensions");
         assertEquals(2, llm.calls, "总数不足 breadth → 补一次");
         assertEquals(3, queriesOf(out).size());
     }
 
     @Test
     void parseDimensionsCapsTotalQueries() {
-        // 2026-09-10 实测失控点：prompt 只说"至少 {numQueries}" → 模型给出 4 维度 × 3 查询 = 12 条，
+        // 实测失控点：prompt 只说"至少 {numQueries}" → 模型给出 4 维度 × 3 查询 = 12 条，
         // 检索成本约翻 4 倍。上限 = max(2×breadth, 4) 强制收敛（展平时截断，保留维度声明）。
         String many = "{\"dimensions\":["
                 + "{\"dimension\":\"A\",\"queries\":[\"a1\",\"a2\",\"a3\"]},"
@@ -298,13 +298,13 @@ class Batch4PreTest {
                 + "{\"dimension\":\"D\",\"queries\":[\"d1\",\"d2\",\"d3\"]}]}";
         DeepResearchPrompts.DimensionPlan capped = DeepResearchPrompts.parseDimensions(many, 6);
         assertEquals(6, capped.queries().size(), "总数被截到上限");
-        assertEquals(4, capped.dimensions().size(), "维度声明保留（供批 4 大纲使用）");
+        assertEquals(4, capped.dimensions().size(), "维度声明保留（供大纲使用）");
 
         // 端到端：breadth=3 → 上限 6，模型给 8 条也只收 6 条
         String plan = "{\"dimensions\":[{\"dimension\":\"A\",\"queries\":[\"q1\",\"q2\",\"q3\",\"q4\"]},"
                 + "{\"dimension\":\"B\",\"queries\":[\"q5\",\"q6\",\"q7\",\"q8\"]}]}";
         ScriptedLlm llm = new ScriptedLlm(plan, "{}");
-        Map<String, Object> out = GenerateQueriesNode.realGenerateQueries(llm, c -> { }, "dimensions").apply(state(3)).join();
+        Map<String, Object> out = GenerateQueriesNode.runGenerateQueries(state(3), llm, c -> { }, "dimensions");
         assertEquals(1, llm.calls, "已满足下界 → 不再补调用");
         assertEquals(6, queriesOf(out).size(), "上限 2×breadth=6");
     }
@@ -314,14 +314,14 @@ class Batch4PreTest {
         String legacyRaw = "{\"queries\":[{\"query\":\"q1\"},{\"query\":\"q2\"},"
                 + "{\"query\":\"q3\"}],\"uncoveredDimensions\":[]}";
         ScriptedLlm legacy = new ScriptedLlm(legacyRaw, "{}");
-        Map<String, Object> outLegacy = GenerateQueriesNode.realGenerateQueries(legacy, c -> { }, "legacy").apply(state(3)).join();
+        Map<String, Object> outLegacy = GenerateQueriesNode.runGenerateQueries(state(3), legacy, c -> { }, "legacy");
         assertEquals(1, legacy.calls, "自检报全覆盖 → 不补查");
         assertEquals(3, queriesOf(outLegacy).size());
         assertFalse(outLegacy.containsKey("dimensions"), "legacy 不产出维度清单");
 
         ScriptedLlm off = new ScriptedLlm(legacyRaw, "{}");
-        Map<String, Object> outOff = GenerateQueriesNode.realGenerateQueries(off, c -> { }, "off").apply(state(3)).join();
-        assertEquals(1, off.calls, "off 档不补查（批 1 行为）");
+        Map<String, Object> outOff = GenerateQueriesNode.runGenerateQueries(state(3), off, c -> { }, "off");
+        assertEquals(1, off.calls, "off 档不补查（初始行为）");
         assertEquals(3, queriesOf(outOff).size());
     }
 
@@ -331,12 +331,12 @@ class Batch4PreTest {
         String legacyRaw = "{\"queries\":[{\"query\":\"q1\"},{\"query\":\"q2\"},"
                 + "{\"query\":\"q3\"}],\"uncoveredDimensions\":[]}";
         ScriptedLlm llm = new ScriptedLlm(legacyRaw, legacyRaw);
-        Map<String, Object> out = GenerateQueriesNode.realGenerateQueries(llm, c -> { }, "dimensions").apply(state(3)).join();
+        Map<String, Object> out = GenerateQueriesNode.runGenerateQueries(state(3), llm, c -> { }, "dimensions");
         assertEquals(List.of("q1", "q2", "q3"), queriesOf(out), "回退后仍拿到查询");
         assertFalse(out.containsKey("dimensions"), "回退路径无维度清单");
     }
 
     // ---------------------------------------------------------------
-    // 配置键解析见 com.gptr.engine.Batch4PreConfigTest（EngineConfig 为包私有）
+    // 配置键解析见 com.gptr.engine.CoverageConfigKeysTest（EngineConfig 为包私有）
     // ---------------------------------------------------------------
 }

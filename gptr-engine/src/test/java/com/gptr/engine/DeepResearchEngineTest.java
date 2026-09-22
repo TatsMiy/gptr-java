@@ -42,7 +42,7 @@ class DeepResearchEngineTest {
         // 连测试库：优先取 -Pintegration 经 surefire 注入的 spring.datasource.url，
         // 缺省也落到 *_test（本测试**不走 Spring context**，故 profile 的
         // systemPropertyVariables 必须自行读取；硬编码 gptr 会被 IntegrationDbGuard 拒绝，
-        // 且曾真实清空过开发库的 graph_checkpoints —— 2026-09-20 实测）
+        // 且曾真实清空过开发库的 graph_checkpoints）
         DriverManagerDataSource ds = new DriverManagerDataSource(
                 System.getProperty("spring.datasource.url",
                         "jdbc:postgresql://localhost:5432/gptr_test"), "gptr", "gptr");
@@ -101,7 +101,7 @@ class DeepResearchEngineTest {
 
         assertTrue(research != null, "RESEARCH stage must run");
         assertTrue(research.payload().contains("\"depthReached\":2"), "2 layers expected: " + research.payload());
-        // I-7 per-query 提炼：breadth=2 × 每 query 2 learnings × 2 层 = 8
+        // per-query 提炼：breadth=2 × 每 query 2 learnings × 2 层 = 8
         assertTrue(research.payload().contains("\"learnings\":8"), "8 learnings (2 per query x 2 queries x 2 layers): " + research.payload());
         // JSON 模式 LLM 每次调用成本 0.001，图内多次调用累加
         assertTrue(research.costUsd() > 0, "graph LLM costs must be aggregated into stage cost");

@@ -9,12 +9,10 @@ import com.gptr.integration.client.LlmClient;
 import com.gptr.integration.client.ScrapedContent;
 import com.gptr.integration.client.ScraperClient;
 import java.util.ArrayList;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.DoubleConsumer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,29 +78,22 @@ final class ScrapeNode {
     }
 
     /** 抓取当前轮 searchResults 中的 URL（visited 过滤，跨层不重复抓）。
-     *  I-7：全文追加进【引用该 URL 的每个条目组】（per-query 提炼的证据归位）。
-     *  J3：extraChars>0（sourceDistill）→ 后端取更长正文、条目截断上限同步放大。
-     *  M-2026：distillOn 时对长页（>4000 字符）做【选句脱水】——逐字摘原句（禁改写），
+     *  全文追加进【引用该 URL 的每个条目组】（per-query 提炼的证据归位）。
+     *  extraChars>0（sourceDistill）→ 后端取更长正文、条目截断上限同步放大。
+     *  distillOn 时对长页（>4000 字符）做【选句脱水】——逐字摘原句（禁改写），
      *  Java 逐句保真前检（containsNormalized），产物以 [DISTILLED] 协议块进组；
      *  蒸馏失败/合格句 <3 → 整页回退 RAW（4k 截断原文块，走现有 extract 路径）。
      *  并发 Semaphore（进程级，防 20k 长文 burst 打爆 API TPM）。
-     *  <p>抓取选项每次 invoke 可不同（来自 config），故留在调用参数上；依赖走构造注入。 */
-    AsyncNodeAction<DeepResearchState> action(DeepResearchGraph.ScrapeQuota quota, EffectiveBudgets budgets,
-                                              boolean distillOn, boolean sourceRank) {
-        return state -> CompletableFuture.supplyAsync(
-                () -> runScrape(state, quota, budgets, distillOn, sourceRank));
-    }
-
-    /** {@link #action} 的实现体（原 lambda 体逐字搬入，缩进 −2 层）。
-     *  {@code budgets} 由 {@link EffectiveBudgets#of} 统一算出（原为本类内联表达式）；
+     *  <p>抓取选项每次 invoke 可不同（来自 config），故留在调用参数上；依赖走构造注入。
+     *  <p>{@code budgets} 由 {@link EffectiveBudgets#of} 统一算出（原为本类内联表达式）；
      *  {@code sourceRank} 开启时在取名前按 URL 分档重排（见 {@link SourceRanker}）。 */
-    private Map<String, Object> runScrape(DeepResearchState state, DeepResearchGraph.ScrapeQuota quota,
-                                          EffectiveBudgets budgets,
-                                          boolean distillOn, boolean sourceRank) {
+    Map<String, Object> runScrape(DeepResearchState state, DeepResearchGraph.ScrapeQuota quota,
+                                  EffectiveBudgets budgets,
+                                  boolean distillOn, boolean sourceRank) {
         String results = state.searchResults();
         List<String> visited = state.visitedUrls();
-        // 批 4-pre：linked 模式按查询组轮转取名（每组保底名额）；flat 模式维持现状
-        //（各查询结果按序拼接后取前 N——前几条查询吃满名额是批 2 实测的素材瓶颈）。
+        // linked 模式按查询组轮转取名（每组保底名额）；flat 模式维持现状
+        //（各查询结果按序拼接后取前 N——前几条查询吃满名额是实测的素材瓶颈）。
         // 关口 A（实验键 sourceRank）：取名前按来源分档重排，使高质量来源优先占用配额。
         // 只调顺序——不增删候选、不改配额；任何失败则各组保持原序（rank 返回 null）。
         // 注意：与下方写回 queryItems 用的 groups 是两个不同用途的列表，勿合并。
@@ -168,7 +159,7 @@ final class ScrapeNode {
             }
             pages = processed;
         }
-        // 链路漏斗计数（2026-09-13）：与 distillStats 同模式跨层累加。
+        // 链路漏斗计数：与 distillStats 同模式跨层累加。
         // picked=本次取名数；returned=爬虫返回页数（含空正文）；validPages=正文非空页数。
         // 用途：回答"检索到了但没抓 / 抓了但没正文"各流失多少（ResearchEngineImpl 的 [chain] 日志）。
         Map<String, Object> chainStats = state.accumulateStats(DeepResearchState.K_CHAIN_STATS);
@@ -197,7 +188,7 @@ final class ScrapeNode {
             return updates;
         }
         StringBuilder sb = new StringBuilder(results);
-        // I-7：深拷贝条目组再追加（LangGraph4j 只合并 updates 声明的键，不能 mutate 内部对象）
+        // 深拷贝条目组再追加（LangGraph4j 只合并 updates 声明的键，不能 mutate 内部对象）
         List<List<String>> groups = new ArrayList<>();
         for (List<String> g : state.queryItems()) {
             groups.add(new ArrayList<>(g));

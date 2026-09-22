@@ -17,7 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.bsc.langgraph4j.action.AsyncNodeAction;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,17 +30,10 @@ final class SearchNode {
     }
 
     /** 真实检索（降级链包装 SearchClient；层内子查询虚拟线程并行）。
-     *  I-7：同时把每子查询结果组装为独立条目组（queryItems，与 queries 对齐）。
+     *  同时把每子查询结果组装为独立条目组（queryItems，与 queries 对齐）。
      *  每子查询响应带实际命中源 → 去重累积进状态 hitSources（观测 detail）。 */
-    static AsyncNodeAction<DeepResearchState> realSearch(SearchClient search, SearchOptions searchOptions,
-                                                        RetrievalBudget retrieval) {
-        return state -> CompletableFuture.supplyAsync(
-                () -> runSearch(state, search, searchOptions, retrieval));
-    }
-
-    /** {@link #realSearch} 的实现体（原 lambda 体逐字搬入，缩进 −2 层）。 */
-    private static Map<String, Object> runSearch(DeepResearchState state, SearchClient search,
-                                                 SearchOptions searchOptions, RetrievalBudget retrieval) {
+    static Map<String, Object> runSearch(DeepResearchState state, SearchClient search,
+                                         SearchOptions searchOptions, RetrievalBudget retrieval) {
         List<String> queries = state.queries();
         Map<String, Object> updates = new HashMap<>();
         if (queries.isEmpty()) {
@@ -53,14 +46,13 @@ final class SearchNode {
         Set<String> hits = new LinkedHashSet<>(state.hitSources());
         try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             List<CompletableFuture<SearchResponse>> futures = queries.stream()
-                    .map(q -> CompletableFuture.supplyAsync(
-                            () -> safeSearch(search, q, searchOptions), pool))
+                    .map(q -> CompletableFuture.supplyAsync(searchTask(search, q, searchOptions), pool))
                     .toList();
             List<SearchResponse> perQueryResponses = new ArrayList<>();
             for (CompletableFuture<SearchResponse> f : futures) {
                 perQueryResponses.add(f.join());
             }
-            // 失败形态统计（2026-09-17）：① 抛异常（safeSearch 兜底 ⇒ sourceUsed 为空）
+            // 失败形态统计：① 抛异常（safeSearch 兜底 ⇒ sourceUsed 为空）
                     // ② 接口正常但 0 结果。二者此前在下游完全不可区分。
             int failed = 0;
             int emptyOk = 0;
@@ -77,16 +69,13 @@ final class SearchNode {
                 List<String> group = new ArrayList<>();
                 for (SearchResult r : resp.results()) {
                     String block = "Title: " + r.title() + "\nURL: " + r.url()
-                            + "\nSnippet: " + r.snippet();
-                    if (r.hasContent()) {
-                        block += "\nContent: " + ContextManager.truncateEach(
-                                r.content(), retrieval.searchContentMaxChars());
-                    }
+                            + "\nSnippet: " + r.snippet()
+                            + (r.hasContent() ? "\nContent: " + ContextManager.truncateEach(
+                                    r.content(), retrieval.searchContentMaxChars()) : "");
                     group.add(block);
                     sb.append(block).append("\n\n");
-                    if (!collected.contains(r.url())) {
-                        collected.add(r.url()); // C3-D：真实检索 URL 累积（授权来源）
-                    }
+                    // 真实检索 URL 累积（授权来源）；LinkedHashSet 自带去重，无需 contains 判断
+                    collected.add(r.url());
                 }
                 groups.add(group);
             }
@@ -96,7 +85,7 @@ final class SearchNode {
         updates.put(DeepResearchState.K_QUERY_ITEMS, groups);
         updates.put(DeepResearchState.K_COLLECTED_URLS, collected);
         updates.put(DeepResearchState.K_HIT_SOURCES, new ArrayList<>(hits));
-        // 批 2 诊断：每条查询命中数 + 该组贡献的"新 URL"数（覆盖补查是否真带新来源看 new）
+        // 诊断：每条查询命中数 + 该组贡献的"新 URL"数（覆盖补查是否真带新来源看 new）
         Set<String> seenUrls = new LinkedHashSet<>();
         StringBuilder perGroup = new StringBuilder();
         for (int i = 0; i < groups.size(); i++) {
@@ -116,7 +105,7 @@ final class SearchNode {
         return updates;
     }
 
-    /** 本轮检索的失败形态判定（2026-09-17 从 {@link #runSearch} 抽出，为守住「方法 ≤80 行」棘轮）。
+    /** 本轮检索的失败形态判定（从 {@link #runSearch} 抽出，为守住「方法 ≤80 行」棘轮）。
      *
      *  <p>两种失败形态此前在下游**完全不可区分**，是"故障伪装成成功"链的第一环
      *  （audit-01 S1/S2 记录：静默空 → 守卫把"检索失败"与"本轮无新信息"混同 → WRITING 拿空上下文
@@ -149,10 +138,10 @@ final class SearchNode {
      *  两处调用点语义不同：正式检索全失败 = 研究无素材（须失败，见 {@link #runSearch}）；
      *  澄清前奏的初搜失败 = 可跳过（{@code ResearchPlanNode}，初搜仅作方向校准）。
      *
-     *  <p>2026-09-17 修正：原实现为静默 {@code return SearchResponse.empty()}，被三份审计点名
-     *  （{@code audit-01} S3「检索故障被静默吞成"无结果"」、{@code audit-02} M4「吞掉包括熔断打开
+     *  <p>**不得静默返回空**：静默 {@code return SearchResponse.empty()} 曾让两种失败不可分，被三份审计点名
+     *  （{@code audit-01} S3「检索故障被静默吞成"无结果"」、{@code audit-02}「吞掉包括熔断打开
      *  在内的所有异常」、{@code C3}「与 {@code Searcher.searchAll} 失败语义不一致」），
-      *  但从未修也从未登记。失败不可见时，"检索器挂了"与"确实没结果"在日志里
+      *  **失败不可见时**，"检索器挂了"与"确实没结果"在日志里
      *  **完全一样**——本次冒烟即因此靠手工探测 crawler 才定位。 */
     static SearchResponse safeSearch(
             SearchClient search, String query, SearchOptions opts) {
@@ -163,5 +152,11 @@ final class SearchNode {
                     e.getClass().getSimpleName(), e.getMessage());
             return SearchResponse.empty();
         }
+    }
+
+    /** 单个子查询的检索任务。抽成独立方法以避开「lambda 内嵌 lambda」（门禁判据 4）。 */
+    private static Supplier<SearchResponse> searchTask(SearchClient search, String query,
+                                                       SearchOptions opts) {
+        return () -> safeSearch(search, query, opts);
     }
 }

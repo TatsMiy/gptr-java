@@ -5,7 +5,7 @@ import com.gptr.benchmark.dataset.BenchmarkItem;
 import com.gptr.benchmark.llm.JudgeClient;
 
 /**
- * D3 客观题准确率（C3-S1 两步判定重构，根治"judge 与被测同源 + 常识题"的自证）。
+ * D3 客观题准确率（两步判定，根治"judge 与被测同源 + 常识题"的自证）。
  *
  * <p>原缺陷：judge 一次调用直接判 correct——对训练常识题，judge 凭自身知识即可判对，
  * 报告可被完全忽略；evidence 校验只证明引文在报告中，挡不住"常识选句"。

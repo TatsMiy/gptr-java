@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * SectionWriter 纯逻辑单测：LCS 归节匹配、覆盖校验、节级引用闸门、机械 References。
- * 审计批（2026-09）：F9 括号 URL 保真、F10 空证据节占位。
+ * 审计要点：括号 URL 保真、空证据节占位（诚实占位门禁）。
  */
 class SectionWriterTest {
 

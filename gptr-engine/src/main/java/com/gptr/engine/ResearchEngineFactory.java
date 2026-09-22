@@ -49,7 +49,7 @@ public class ResearchEngineFactory {
 
     /** 蒸馏并发闸容量（<b>应用级</b>配置）。
      *  闸是**进程内共享**的，故容量必须来自与它同生命周期的配置；任务级 config 里的
-     *  {@code distillConcurrency} 自 2026-09-14 起不再影响闸容量。 */
+     *  {@code distillConcurrency} **不影响闸容量**。 */
     @Value("${gptr.engine.distill-concurrency:3}")
     private int distillConcurrency;
 
@@ -63,7 +63,7 @@ public class ResearchEngineFactory {
     }
 
     public ResearchEngine create(ResearchTask task) {
-        // J3：研报语言可配（config language：zh/中文 → 中文，en/English → English）
+        // 研报语言可配（config language：zh/中文 → 中文，en/English → English）
         EngineConfig cfg = new EngineConfig(task.getConfig());
         return new ResearchEngineImpl(task, new ResearchEngineImpl.EngineDeps(planner, searcher,
                 llmClient, searchClient, new ReportWriter(llmClient, cfg.language), scraperClient,

@@ -6,7 +6,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 同源镜像判定（2026-09-13，q08 根因复盘）。
+ * 同源镜像判定。
  *
  * <p>问题：同一篇文章常有多个入口域名/路径，检索会同时返回多条，例如 q08 实测：
  * <pre>
@@ -67,10 +67,6 @@ public final class SourceMirror {
         return body + "|" + id;
     }
 
-    // 【2026-09-14 删除】此处原有 `public static boolean isMirror(String a, String b)` 便利方法，
-    // 但生产代码（DeepResearchGraph 的取名与 visited 过滤）一律按 mirrorKey 去重，它没有任何
-    // 调用点 —— 无人使用的 API 只是维护负担（删除见提交 4ef3ca1）。
-    // "是否同源"完全可由「去重键是否相等」表达，测试即如此断言。
 
     /** 域名主体：从右往左去掉通用后缀词，返回第一个非通用段及其右侧全部段；全通用则返回 host。 */
     static String bodyOf(String url) {
@@ -88,12 +84,11 @@ public final class SourceMirror {
         }
         for (int i = parts.length - 1; i >= 0; i--) {
             if (!GENERIC.contains(parts[i])) {
-                StringBuilder sb = new StringBuilder();
-                for (int j = i; j < parts.length; j++) {
-                    if (sb.length() > 0) {
-                        sb.append('.');
-                    }
-                    sb.append(parts[j]);
+                // 从首个非泛化标签起拼回：用「先放首段、后续一律前置 '.'」避免
+                // 逐次判断"是否首段"——那会多一层控制嵌套。
+                StringBuilder sb = new StringBuilder(parts[i]);
+                for (int j = i + 1; j < parts.length; j++) {
+                    sb.append('.').append(parts[j]);
                 }
                 return sb.toString();
             }
@@ -162,6 +157,8 @@ public final class SourceMirror {
             String q = u.getRawQuery() == null ? "" : u.getRawQuery();
             return p + " " + q;
         } catch (Exception ignored) {
+            // 有意忽略异常：走到这里说明 url 不是合法 URI（相对路径/裸主机名等），
+            // 本身就该走下面的正则兜底分支；异常信息对定位调用方问题没有增量价值。
             Matcher m = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]*://[^/?#]+([^#]*)").matcher(url.trim());
             return m.find() ? m.group(1) : url;
         }

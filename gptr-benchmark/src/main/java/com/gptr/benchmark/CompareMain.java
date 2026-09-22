@@ -290,9 +290,9 @@ public final class CompareMain {
     /**
      * 解析 {@code --key value} 与无值开关 {@code --flag}（置为 {@code "true"}）。
      *
-     * <p>【2026-09-14 修复】原实现 {@code for (i = 0; i < args.length - 1; i += 2)} 有两个缺陷：
+     * <p>本实现**按位扫描且不静默**，避免"参数被静默忽略"（那意味着实际跑的与以为跑的是两回事）：
      * <ul>
-     *   <li><b>静默丢弃末尾孤立参数</b>：末位参数永远进不了循环 → 例如
+     *   <li><b>不留末尾孤立参数</b>：末位参数同样被处理 → 例如
      *       {@code run_compare.ps1} 追加在最后的 {@code --no-microgold} 从未生效（micro-gold
      *       自检一直照跑）；</li>
      *   <li><b>无值开关会把下一个参数吞成值</b>：{@code --no-microgold --set x} 会解析成

@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 逐节写作器（outline 先行 → 逐节独立写作 → 机械 References；FS-Researcher/WebWeaver 背书）：
@@ -31,13 +33,13 @@ import java.util.Set;
  */
 public class SectionWriter {
 
-    private static final org.slf4j.Logger LOG =
-            org.slf4j.LoggerFactory.getLogger(SectionWriter.class);
+    private static final Logger LOG =
+            LoggerFactory.getLogger(SectionWriter.class);
 
     /** 归节匹配的最低公共子串长度（queryText 与节 queries 都是 ≤400 截断的同源文本）。 */
     public static final int MATCH_MIN = 8;
 
-    /** 批 2：大纲节数默认上限（解析 cap 与 prompt 同源；EngineConfig.maxSections 可配）。 */
+    /** 大纲节数默认上限（解析 cap 与 prompt 同源；EngineConfig.maxSections 可配）。 */
     public static final int DEFAULT_MAX_SECTIONS = 6;
 
     /** 已写节注入的"关闭"值（= 现状等价；兼容构造器与 A/B 对照档使用）。 */
@@ -46,8 +48,7 @@ public class SectionWriter {
         /** 写作域预算载体——原
      *  {@code DEFAULT_EVIDENCE_INDEX_CHARS} / {@code INDEX_SUMMARY_CHARS} /
      *  {@code SECTION_QUOTE_CHARS} 三个常量已并入，本类不再声明它们的值。
-     *  <p>取值理由随常量迁至 {@link WritingBudget}：目录上限曾于 2026-09-13 由 12000 提到
-     *  40000（实测 195 条证据 ≈21k 字符，12000 时截断 31%、被截证据无法被直引）。 */
+     *  <p>取值理由随常量迁至 {@link WritingBudget}：目录上限 40000（实测 195 条证据 ≈21k 字符，12000 时截断 31%、被截证据无法被直引）。 */
     private static final WritingBudget WRITING = Budgets.defaults().writing();
 
     /** {@code maxSections} 二次收窄的下界。 */
@@ -72,7 +73,7 @@ public class SectionWriter {
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** 大纲节。subQueryIdx：该节覆盖的输入子查询下标（0-based；LLM 坏输出=空 → 弱锚）。
-     *  批 4（WebWeaver 直引）：evidenceIdx = 该节**直引的证据下标**（对应证据目录的 [idx]，
+     *  直引归节（WebWeaver 式）：evidenceIdx = 该节**直引的证据下标**（对应证据目录的 [idx]，
      *  与 {@link #buildEvidenceIndex} 的编号一致；越界由消费端静默丢弃）。 */
     public record Section(String title, String goal, List<String> queries,
                           List<Integer> subQueryIdx, List<Integer> evidenceIdx) {
@@ -82,7 +83,7 @@ public class SectionWriter {
             this(title, goal, queries, List.of(), List.of());
         }
 
-        /** 兼容构造（批 4 之前：有 subQueryIdx、无 evidenceIdx）。 */
+        /** 兼容构造：仅含 subQueryIdx、无 evidenceIdx（旧 checkpoint 反序列化用）。 */
         public Section(String title, String goal, List<String> queries,
                        List<Integer> subQueryIdx) {
             this(title, goal, queries, subQueryIdx, List.of());
@@ -102,14 +103,14 @@ public class SectionWriter {
         this(llm, sectionContextChars, retryOnUnauthorized, DEFAULT_MAX_SECTIONS);
     }
 
-    /** 批 2：maxSections 可配（大纲 prompt "at most {maxSections}" 与解析 cap 同源）。
+    /** maxSections 可配（大纲 prompt "at most {maxSections}" 与解析 cap 同源）。
      *  <p>兼容构造：**不启用已写节注入**（{@link #NO_PRIOR_SECTIONS}）——仅测试与回退档使用。 */
     public SectionWriter(LlmClient llm, int sectionContextChars, boolean retryOnUnauthorized,
                          int maxSections) {
         this(llm, sectionContextChars, retryOnUnauthorized, maxSections, NO_PRIOR_SECTIONS);
     }
 
-        /** 生产构造（2026-09-19）：{@code priorSectionsMaxChars ≤ 0} ⇒ 关闭已写节注入。 */
+        /** 生产构造：{@code priorSectionsMaxChars ≤ 0} ⇒ 关闭已写节注入。 */
     public SectionWriter(LlmClient llm, int sectionContextChars, boolean retryOnUnauthorized,
                          int maxSections, int priorSectionsMaxChars) {
         this.llm = llm;
@@ -124,12 +125,12 @@ public class SectionWriter {
     // ------------------------------------------------------------------
 
     /** outline 生成（1 调）；坏输出/空 → null（调用方回退单遍 writer）。
-     *  批 4：{@code evidenceIndex} 为空 → 走"无目录"文案（保持旧行为，便于对照）。 */
+     *  {@code evidenceIndex} 为空 → 走"无目录"文案（保持旧行为，便于对照）。 */
     public OutlineResult writeOutline(String query, String researchState, List<String> subQueries) {
         return writeOutline(query, researchState, subQueries, null);
     }
 
-    /** 批 4：带证据目录的 outline（目录由 {@link #buildEvidenceIndex} 构造，LLM 可据其直引）。 */
+    /** 带证据目录的 outline（目录由 {@link #buildEvidenceIndex} 构造，LLM 可据其直引）。 */
     public OutlineResult writeOutline(String query, String researchState, List<String> subQueries,
                                       String evidenceIndex) {
         StringBuilder qb = new StringBuilder();
@@ -168,45 +169,22 @@ public class SectionWriter {
                 if (sections.size() >= maxSections) {
                     continue;   // 已满：继续数（截断判定需要真实候选数），但不再收
                 }
-                List<String> qs = new ArrayList<>();
-                for (JsonNode q : s.path("queries")) {
-                    String qt = q.asText("");
-                    if (!qt.isBlank()) {
-                        qs.add(qt.trim());
-                    }
-                }
-                // subQueryIdx 解析（0-based；缺/非数组/坏值 → 空 → 弱锚回退）。
-                // 越界下标消费时静默丢弃（assignNotes 内校验），绝不让坏输出中断成稿。
-                List<Integer> idx = new ArrayList<>();
-                JsonNode idxArr = s.path("subQueryIdx");
-                if (idxArr.isArray()) {
-                    for (JsonNode it : idxArr) {
-                        if (it.isIntegralNumber()) {
-                            idx.add(it.asInt());
-                        } else if (it.isTextual()) {
-                            try {
-                                idx.add(Integer.parseInt(it.asText().trim()));
-                            } catch (NumberFormatException ignored) {
-                                // 非数字文本：跳过
-                            }
-                        }
-                    }
-                }
+                List<String> qs = parseQueries(s);
+                List<Integer> idx = parseSubQueryIdx(s);
                 sections.add(new Section(t.trim(), s.path("goal").asText("").trim(),
                         qs, idx, parseEvidenceIdx(s)));
             }
             if (sections.isEmpty()) {
                 return null;
             }
-            // 批 2：maxSections 是否真的截断（candidates > cap 才算参数生效，否则是模型自己少给；
+            // maxSections 是否真的截断（candidates > cap 才算参数生效，否则是模型自己少给；
             // candidates 已剔除空标题，blank 跳过不算截断）
             LOG.info("[batch2] outline: raw={} candidates={} cap={} kept={}{}", planned, candidates,
                     maxSections, sections.size(), candidates > maxSections ? " TRUNCATED" : "");
             return new OutlineResult(title.isBlank() ? null : title.trim(), sections);
         } catch (Exception e) {
-            // 【2026-09-14 修复】原为静默 `return null`：outline 是逐节写作的入口，它失败会让
-            // 整份报告静默回退到单遍 writer（运维只看到 writingMode: single），不留任何痕迹，
-            // 而本文件其他失败路径（:180/:328/:330）都打了日志。此处补 warn。
+            // outline 失败会让整份报告静默回退到单遍 writer（运维只看到 writingMode: single），
+            // 不留任何痕迹，而本文件其他失败路径都打了日志 ⇒ 此处必须 warn。
             LOG.warn("[section] outline 生成失败 → 将回退单遍 writer: {}", e.toString());
             return null;
         }
@@ -220,7 +198,7 @@ public class SectionWriter {
      *
      * <p>两点设计：
      * <ul>
-     *   <li><b>按查询方向分组</b>（queryText 首次出现序）——批 4-pre 的维度清单模式下，
+     *   <li><b>按查询方向分组</b>（queryText 首次出现序）——维度清单模式下，
           *       一个维度通常对应一条查询，故分组天然接近"按维度组织证据"，
      *       且无需额外状态；</li>
      *   <li><b>组间轮转取用</b>——预算有限时每组都能露脸，避免前半段证据吃满目录
@@ -297,7 +275,7 @@ public class SectionWriter {
      * <ol>
      *   <li>note 下标 ∈ 节.evidenceIdx → 归该节（同 note 可归多节）；越界/负值静默丢弃；</li>
      *   <li>**未被任何节直引**的 note → 返回值的最后一组（兜底组），由调用方决定去留；</li>
-     *   <li>直引为空的节 → 该节证据列表为空 → 上层走 F10 占位路径（诚实，不再猜）。</li>
+     *   <li>直引为空的节 → 该节证据列表为空 → 上层走占位路径（诚实，不再猜）。</li>
      * </ol>
      *
      * @return 长度 = sections.size() + 1 的列表；前 N 组对应各节，**最后一组为未直引的兜底组**
@@ -307,7 +285,7 @@ public class SectionWriter {
         return groupByCitationWithStats(notes, sections).grouped();
     }
 
-        /** 归节统计——{@code emptySections} 是 **F10 的唯一前兆**（该节无证据 → 占位）；
+        /** 归节统计——{@code emptySections} 是 **占位的唯一前兆**（该节无证据 → 占位）；
      *  {@code sharedNotes} 为被 ≥2 节引用的证据数（多对多生效的直接证据）。 */
     public record CitationStats(List<List<Integer>> grouped, int emptySections, int sharedNotes,
                                 int droppedIdx, int fallbackNotes) {
@@ -355,7 +333,7 @@ public class SectionWriter {
             LOG.info("[batch4] citation: dropped {} out-of-range evidenceIdx (kept in fallback)", dropped);
         }
         LOG.info("[batch4] citation: {} notes → sections {} + fallback {} | emptySections={}"
-                        + " sharedNotes={} (F10 前兆：emptySections>0 表示该节将走占位)",
+                        + " sharedNotes={} (占位前兆：emptySections>0 表示该节将走占位)",
                 notes.size(), bySection.subList(0, sections.size()).stream()
                         .map(List::size).toList(), unassigned.size(), emptySections, shared);
         return new CitationStats(bySection, emptySections, shared, dropped, unassigned.size());
@@ -364,8 +342,53 @@ public class SectionWriter {
     public record OutlineResult(String title, List<Section> sections) {
     }
 
+    /** 解析节 queries（缺/非数组 → 空；空白项丢弃、保留项 trim 后收）。 */
+    static List<String> parseQueries(JsonNode section) {
+        List<String> qs = new ArrayList<>();
+        for (JsonNode q : section.path("queries")) {
+            String qt = q.asText("");
+            if (!qt.isBlank()) {
+                qs.add(qt.trim());
+            }
+        }
+        return qs;
+    }
+
+    /** 解析 subQueryIdx 数组（0-based；缺/非数组/坏值 → 空 → 弱锚回退）。
+     *  <p>越界下标消费时静默丢弃（{@link #assignNotes} 内校验），绝不让坏输出中断成稿。 */
+    static List<Integer> parseSubQueryIdx(JsonNode section) {
+        JsonNode arr = section.path("subQueryIdx");
+        if (!arr.isArray()) {
+            return List.of();
+        }
+        List<Integer> idx = new ArrayList<>();
+        for (JsonNode it : arr) {
+            Integer v = subQueryIdxOf(it);
+            if (v != null) {
+                idx.add(v);
+            }
+        }
+        return idx;
+    }
+
+    /** 单个下标元素：整数直取，数字文本解析，其余 null（非整数文本/坏值 → 跳过该条）。 */
+    private static Integer subQueryIdxOf(JsonNode it) {
+        if (it.isIntegralNumber()) {
+            return it.asInt();
+        }
+        if (!it.isTextual()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(it.asText().trim());
+        } catch (NumberFormatException ignored) {
+            // 非数字文本：跳过
+            return null;
+        }
+    }
+
     /**
-     * 批 4：解析节的 {@code evidenceIdx}（直引证据下标）。
+     * 解析节的 {@code evidenceIdx}（直引证据下标）。
      *
           * <p>容错：非整数/负值静默剔除；**重复去重保序**；整字段缺失/坏 →
      * 空列表（该节走兜底，不整条拒收）。越界值此处不判（不知道 notes 规模），
@@ -415,17 +438,7 @@ public class SectionWriter {
             // 1) 硬锚
             int anchor = -1;
             if (note.queryIdx() >= 0) {
-                for (int s = 0; s < sections.size(); s++) {
-                    for (Integer qi : sections.get(s).subQueryIdx()) {
-                        if (qi != null && qi >= 0 && qi.equals(note.queryIdx())) {
-                            anchor = s;
-                            break;
-                        }
-                    }
-                    if (anchor >= 0) {
-                        break;
-                    }
-                }
+                anchor = findHardAnchor(sections, note.queryIdx());
             }
             if (anchor >= 0) {
                 out[i] = anchor;
@@ -433,20 +446,37 @@ public class SectionWriter {
             }
             // 2) 弱锚（归一化匹配）
             String qt = normalizeMatch(notes.get(i).queryText());
-            int bestSection = -1;
-            int bestScore = MATCH_MIN - 1;
-            for (int s = 0; s < sections.size(); s++) {
-                for (String q : sections.get(s).queries()) {
-                    int score = longestCommonSubstring(qt, normalizeMatch(q));
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestSection = s;
-                    }
-                }
-            }
-            out[i] = bestSection;
+            out[i] = bestWeakSection(sections, qt);
         }
         return out;
+    }
+
+    /** 硬锚：note.queryIdx ∈ 节.subQueryIdx → 该节下标；无命中 → -1（走弱锚）。 */
+    private static int findHardAnchor(List<Section> sections, int queryIdx) {
+        for (int s = 0; s < sections.size(); s++) {
+            for (Integer qi : sections.get(s).subQueryIdx()) {
+                if (qi != null && qi >= 0 && qi.equals(queryIdx)) {
+                    return s;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** 弱锚：归一化后最长公共子串 ≥ {@link #MATCH_MIN} 的最佳节；无命中 → -1（未归组）。 */
+    private static int bestWeakSection(List<Section> sections, String qt) {
+        int bestSection = -1;
+        int bestScore = MATCH_MIN - 1;
+        for (int s = 0; s < sections.size(); s++) {
+            for (String q : sections.get(s).queries()) {
+                int score = longestCommonSubstring(qt, normalizeMatch(q));
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestSection = s;
+                }
+            }
+        }
+        return bestSection;
     }
 
     /**
@@ -524,23 +554,23 @@ public class SectionWriter {
     public List<String> uncoveredSubQueries(List<String> subQueries, List<Section> sections) {
         List<String> uncovered = new ArrayList<>();
         for (String sq : subQueries) {
-            boolean covered = false;
-            for (Section s : sections) {
-                for (String q : s.queries()) {
-                    if (containsOrFuzzy(sq, q)) {
-                        covered = true;
-                        break;
-                    }
-                }
-                if (covered) {
-                    break;
-                }
-            }
-            if (!covered) {
+            if (!isCovered(sq, sections)) {
                 uncovered.add(sq);
             }
         }
         return uncovered;
+    }
+
+    /** 是否被任一节 query 覆盖（{@link #containsOrFuzzy} 命中即 true）。 */
+    private static boolean isCovered(String sq, List<Section> sections) {
+        for (Section s : sections) {
+            for (String q : s.queries()) {
+                if (containsOrFuzzy(sq, q)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean containsOrFuzzy(String a, String b) {
@@ -606,7 +636,7 @@ public class SectionWriter {
     }
 
     // ------------------------------------------------------------------
-    // 已写节注入（2026-09-19；规格 design-prior-sections-injection-20260919.md）
+    // 已写节注入
     // ------------------------------------------------------------------
 
     /**
@@ -648,7 +678,7 @@ public class SectionWriter {
         // 图片 ![alt](url) → alt
         String s = text.replaceAll("!\\[([^\\]]*)\\]\\([^)]*\\)", "$1");
         // 链接 [label](url) → [label]：**保留方括号**——剥成裸文本会让模型把"无链接"当引用范式
-        // （2026-09-19 实测：两轮独立审计各发现 29 处裸标签引用退化）
+        // （实测：两轮独立审计各发现 29 处裸标签引用退化）
         s = s.replaceAll("\\[([^\\]]*)\\]\\([^)]*\\)", "[$1]");
         // 裸 URL → 删除（避免污染节级引用闸门）
         s = s.replaceAll("https?://\\S+", "");
@@ -688,7 +718,7 @@ public class SectionWriter {
         StringBuilder sb = new StringBuilder();
         for (EvidenceNote n : notes) {
             if (n.sourceUrl() == null || n.sourceUrl().isBlank()) {
-                continue; // 空锚 note 不进节证据（无授权引用资格，P2-2 红线）
+                continue; // 空锚 note 不进节证据（无授权引用资格）
             }
             String line = n.insight();
             if (n.quote() != null && !n.quote().isBlank()) {
@@ -764,23 +794,7 @@ public class SectionWriter {
                 continue;
             }
             String label = text.substring(i + 1, close).trim();
-            int j = close + 2;
-            int open = 0;
-            while (j < n) {
-                char c = text.charAt(j);
-                if (c == '(') {
-                    open++;
-                } else if (c == ')') {
-                    if (open == 0) {
-                        break; // markdown 链接闭合
-                    }
-                    open--;
-                } else if (c == ']' || c == '>' || c == '"' || c == '\'' || c == '`'
-                        || Character.isWhitespace(c)) {
-                    break;
-                }
-                j++;
-            }
+            int j = scanLinkUrlEnd(text, close + 2);
             String url = text.substring(close + 2, j).trim();
             boolean http = url.regionMatches(true, 0, "https://", 0, 8)
                     || url.regionMatches(true, 0, "http://", 0, 7);
@@ -790,6 +804,36 @@ public class SectionWriter {
             i = Math.max(j + 1, i + 1);
         }
         return out;
+    }
+
+    /** 从 start 扫到 URL 段结束位置（括号配平；遇 {@link #isLinkUrlTerminator} 停）。
+     *  <p>与 {@link CitationVerifier#extractUrls} 的扫描同构，但终止字符集更窄
+     *  （不含逗号/中文句读——本方法只服务 markdown 链接闭合，语义保持原样）。 */
+    private static int scanLinkUrlEnd(String text, int start) {
+        int n = text.length();
+        int j = start;
+        int open = 0;
+        while (j < n) {
+            char c = text.charAt(j);
+            if (c == '(') {
+                open++;
+            } else if (c == ')') {
+                if (open == 0) {
+                    break; // markdown 链接闭合
+                }
+                open--;
+            } else if (isLinkUrlTerminator(c)) {
+                break;
+            }
+            j++;
+        }
+        return j;
+    }
+
+    /** 链接 URL 终止字符（空白/引号/反引号/{@code ]}/{@code >}）。 */
+    private static boolean isLinkUrlTerminator(char c) {
+        return c == ']' || c == '>' || c == '"' || c == '\'' || c == '`'
+                || Character.isWhitespace(c);
     }
 
     // ------------------------------------------------------------------

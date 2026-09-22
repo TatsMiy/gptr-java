@@ -17,7 +17,7 @@ package com.gptr.engine.budget;
  *                               —— 目录每行摘要截断长度（60–120 字，取 120）
  *  @param evidenceIndexMaxChars 原 {@code SectionWriter.DEFAULT_EVIDENCE_INDEX_CHARS} = 40000
  *                               —— 证据目录默认**上限**（{@code EngineConfig.evidenceIndexMaxChars}
- *                               可配）。2026-09-13 由 12000 提到 40000：实测 195 条证据 ≈21k 字符，
+ *                               可配）。取值 40000：实测 195 条证据 ≈21k 字符，
  *                               12000 时截断 31%，被截证据 LLM 看不见 → 无法直引 → 全进兜底组。
  *                               语义是"内容实际长度封顶"而非"预算"（证据少时不补齐）
  *  @param quoteRenderMaxChars   原 {@code DeepResearchPrompts.QUOTE_RENDER_MAX_CHARS} = 120

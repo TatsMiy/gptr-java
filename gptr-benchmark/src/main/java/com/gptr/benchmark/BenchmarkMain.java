@@ -71,10 +71,9 @@ public final class BenchmarkMain {
         String judgeKey = opt.getOrDefault("judge-key",
                 System.getenv("DEEPSEEK_API_KEY") == null ? "" : System.getenv("DEEPSEEK_API_KEY"));
         String datasetLoc = opt.getOrDefault("dataset", "classpath:datasets/benchmark.jsonl");
-        // 【2026-09-14 修复】limit 默认由 "0"（=不截断，跑完整题集）改为 "1"。
+        // limit 默认 1（**不默认跑完整题集**）。
         // 原因：零参数执行 `mvn -pl gptr-benchmark exec:java` 会直接向真实 API 提交
-        // 全部 47 题（--api 有默认值、旧 parseArgs 静默忽略未知参数）—— 2026-09-13 已真实
-        // 发生一次（见 pom 中 exec 插件的警示注释）。改为默认只跑 1 题，把误触代价压到最小；
+        // 全部 47 题（--api 有默认值）—— 误触一次就是全量调用。默认只跑 1 题把代价压到最小；
         // 全量运行请显式传 --limit 0，并配合 --set/--dataset 指定题集。
         int limit = Integer.parseInt(opt.getOrDefault("limit", "1"));
         extraConfigJson = opt.getOrDefault("config", "");
@@ -141,7 +140,7 @@ public final class BenchmarkMain {
         int hallNoCitation = 0;
         int hallUnverifiable = 0;
         int hallJudgedItems = 0;
-        // P0-4：泄漏计数（报告引用 blocked 来源）
+        // 泄漏计数（报告引用 blocked 来源）
         int leakItems = 0;
         int leakExcludedCorrect = 0;
         // KAE-lite（引用覆盖）聚合
@@ -304,7 +303,7 @@ public final class BenchmarkMain {
         writeBuckets(stale, staleBuckets);
         ArrayNode directStale = metrics.putArray("directStaleBy");
         writeBuckets(directStale, directStaleBuckets);
-        // D2 加权聚合（按 judged 句数加权，不再条目等权；C3-M3）。J1 口径：
+        // D2 加权聚合（按 judged 句数加权，不再条目等权）。指标口径：
         // hallucinationUnsupported = 确认矛盾（contradictory），inconclusive 单列；
         // weightedHallucinationRate = 保守下限（矛盾/可判），uncertainRate = 含"无法证实"上限
         metrics.put("hallucinationClaims", hallClaims);
@@ -323,7 +322,7 @@ public final class BenchmarkMain {
         metrics.put("kaeKcrAvg", round(kaeCount == 0 ? Double.NaN : kcrSum / kaeCount));
         metrics.put("kaeKorAvg", round(kaeCount == 0 ? Double.NaN : korSum / kaeCount));
         metrics.put("kaeEfficiencyAvg", round(kaeCount == 0 ? Double.NaN : kaeEffSum / kaeCount));
-        // P0-4：泄漏上报（Bench II）：引用 blocked 源的题数/被剔除的"答对"题数
+        // 泄漏上报（Bench II）：引用 blocked 源的题数/被剔除的"答对"题数
         metrics.put("leakItems", leakItems);
         metrics.put("leakRate", round(items.isEmpty() ? Double.NaN : (double) leakItems / items.size()));
         metrics.put("leakExcludedCorrect", leakExcludedCorrect);
@@ -415,7 +414,7 @@ public final class BenchmarkMain {
      *  （首跑 {@code ctx.ts()+idx}、重试再 {@code +1000}），非 {@code ctx.ts()} 本身。 */
     private static void processItem(BenchmarkItem item, ObjectNode row, ItemRunContext ctx, long ts) {
         String clientKey = "bench-" + ts + "-" + item.id();
-        // P0-4：任务 config 注入 blockedUrls → 产品检索/抓取层直接屏蔽（防"引用源文答题"泄漏）
+        // 任务 config 注入 blockedUrls → 产品检索/抓取层直接屏蔽（防"引用源文答题"泄漏）
         TaskRunner.ResearchOutcome r = ctx.taskRunner().runWithConfig(item.query(), configFor(item),
                 clientKey, 300);
         row.put("taskId", r.taskId() == null ? "" : r.taskId());
@@ -435,7 +434,7 @@ public final class BenchmarkMain {
         row.put("unreferencedInText", d1.unreferencedInText());
         row.put("citationConsistency", round(d1.consistency()));
 
-        // P0-4：泄漏检测（Bench II）——报告文本出现 blocked 条目（URL 前缀/域名即命中；
+        // 泄漏检测（Bench II）——报告文本出现 blocked 条目（URL 前缀/域名即命中；
         // 检索层已屏蔽，出现即穿透信号）
         if (item.hasBlocked()) {
             List<String> hit = new ArrayList<>();
@@ -452,7 +451,7 @@ public final class BenchmarkMain {
         }
 
         if (item.hasGold() && ctx.judge() != null) {
-            // D3 客观题（C3-S1 两步判定 + H3 三分类 verdict：correct/stale/incorrect）
+            // D3 客观题（两步判定 + H3 三分类 verdict：correct/stale/incorrect）
             AnswerAccuracyJudge.Verdict v = AnswerAccuracyJudge.judge(item, r.report(), ctx.judge());
             ctx.judgeTokens().addAndGet(ctx.judge().lastTokens());
             if (v == null) {
@@ -596,7 +595,7 @@ public final class BenchmarkMain {
                 }
             }
             if (item.hasBlocked()) {
-                com.fasterxml.jackson.databind.node.ArrayNode arr = cfg.putArray("blockedUrls");
+                ArrayNode arr = cfg.putArray("blockedUrls");
                 item.blocked().forEach(arr::add);
             }
             return cfg.toString();
@@ -632,10 +631,8 @@ public final class BenchmarkMain {
     /**
      * 解析 {@code --key value} 与无值开关 {@code --flag}（置为 {@code "true"}）。
      *
-     * <p>【2026-09-14 修复】原实现 {@code for (i = 0; i < args.length - 1; i += 2)} 有两个缺陷：
-     * 末位参数永远进不了循环（静默丢弃，如追加在最后的无值开关），且无值开关会把下一个
-     * 参数吞成它的取值。对评测入口而言，"参数被静默忽略"意味着**实际跑的与以为跑的不是一回事**
-     * —— 2026-09-13 的误跑事故即由此放大。现改为按位扫描：非 {@code --} 开头直接报错，
+     * <p>对评测入口而言，"参数被静默忽略"意味着**实际跑的与以为跑的不是一回事**，
+     * 故本实现**按位扫描且不静默**：非 {@code --} 开头直接报错，
      * 下一参数不以 {@code --} 开头时作为取值，否则视作无值开关。
      */
     private static Map<String, String> parseArgs(String[] args) {

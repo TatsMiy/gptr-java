@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * M-2026 素材增强：蒸馏保真前检 + [DISTILLED] 块直通解析（Y 臂核心，纯函数级）。
+ * 素材增强：蒸馏保真前检 + [DISTILLED] 块直通解析（Y 臂核心，纯函数级）。
  */
 class MaterialPipelineTest {
 
@@ -123,7 +123,7 @@ class MaterialPipelineTest {
 
     @Test
     void yArmDistilledDirectDedupAcrossGroups() throws Exception {
-        // M-2026 实测驱动（q04-Y 单 URL max 248 条）：同 URL 蒸馏块经 appendToGroupsReferencing
+        // 实测驱动（q04-Y 单 URL max 248 条）：同 URL 蒸馏块经 appendToGroupsReferencing
         // 进多个查询组 → Y 臂每组件都直通同一批句 → 跨组重复。页级蒸馏无查询视角，跨组复制
         // 零信息增益——合并处 (sourceUrl, insight) 去重，保留首组归属。
         String url = "https://example.com/p1";
@@ -137,11 +137,10 @@ class MaterialPipelineTest {
                 "queryItems", items,
                 "collectedUrls", java.util.List.of(url),
                 "currentDepth", 0)));
-        // 批 2：本用例走 [DISTILLED] 直通（不进 LLM），joinCap 不参与该路径，
+        // 本用例走 [DISTILLED] 直通（不进 LLM），joinCap 不参与该路径，
         // 故直接用出厂预算即可（原第三参为字面量 10000）
-        var action = ExtractNode.realExtractPerQuery(null, cost -> { },
+        java.util.Map<String, Object> updates = ExtractNode.runPerQueryExtract(state, null, cost -> { },
                 Budgets.defaults().extraction(), false);
-        java.util.Map<String, Object> updates = action.apply(state).get();
         @SuppressWarnings("unchecked")
         java.util.List<String> bank = (java.util.List<String>) updates.get("evidenceBank");
         assertEquals(2, bank.size(), "双组×重复块直通应去重为 2 句（原 6）");

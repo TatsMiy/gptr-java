@@ -61,6 +61,12 @@
             <scope>test</scope>
         </dependency>
         <!-- 真实适配器测试用 JDK 内置 HttpServer 模拟 HTTP（零依赖，无需真 key） -->
+        <dependency>
+            <groupId>com.github.javaparser</groupId>
+            <artifactId>javaparser-core</artifactId>
+            <version>3.26.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

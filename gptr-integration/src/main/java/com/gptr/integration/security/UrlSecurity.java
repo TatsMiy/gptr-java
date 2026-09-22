@@ -81,7 +81,7 @@ public final class UrlSecurity {
             // 解析到至少一个地址且全为公网 → 放行；解析 0 地址（罕见）→ fail-closed
             return resolved == 0;
         } catch (UnknownHostException e) {
-            // C3-S10 fail-closed：解析失败视为不安全（死域/DNS 状态不可知），拒绝而非放行
+            // fail-closed：解析失败视为不安全（死域/DNS 状态不可知），拒绝而非放行
             return true;
         }
     }
@@ -133,7 +133,7 @@ public final class UrlSecurity {
                     return true; // fail-closed
                 }
             }
-            // C3-S10：JDK isSiteLocalAddress 对 IPv6 只认废弃的 fec0::/10，
+            // JDK isSiteLocalAddress 对 IPv6 只认废弃的 fec0::/10，
             // 不含 ULA fc00::/7（fd00::/8 常用内网前缀）——显式补判
             return (b[0] & 0xfe) == 0xfc;
         }

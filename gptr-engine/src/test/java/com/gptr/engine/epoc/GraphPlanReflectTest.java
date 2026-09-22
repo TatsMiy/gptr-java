@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * J6（P1-7/P1-6A）专项测试：
+ * 层间计划反思（plan_reflect）与 quote 保真专项测试：
  * - plan_reflect 层间节点：中央研究状态写回并驱动下轮 follow-up（坏输出回退 "(none)"）；
  * - evidenceQuote：extract 解析编码 [quote:]；未授权时 quote+source 一并剥除。
  */
-class DeepResearchGraphJ6Test {
+class GraphPlanReflectTest {
 
-    /** 可控 mock LLM：plan-reflect 走独立分支（其余同 IBatch mock）。 */
+    /** 可控 mock LLM：plan-reflect 走独立分支（其余同 GraphClarifyExtractCurateTest 的 mock）。 */
     static class MockLlm implements LlmClient {
         final List<String> systems = new CopyOnWriteArrayList<>();
         final List<String> users = new CopyOnWriteArrayList<>();

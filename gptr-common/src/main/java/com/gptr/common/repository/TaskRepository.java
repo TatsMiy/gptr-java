@@ -33,7 +33,7 @@ public interface TaskRepository extends JpaRepository<ResearchTask, UUID> {
     Optional<ResearchTask> findByClientKey(String clientKey);
 
     // ------------------------------------------------------------------
-    // OBS-1 观测台查询（V7 索引 (status, created_at DESC)）
+    // 观测台查询（V7 索引 (status, created_at DESC)）
     // ------------------------------------------------------------------
 
     /** 最新全部任务（created_at DESC）。 */

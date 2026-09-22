@@ -44,25 +44,30 @@ public class SubQueryPlanner {
         return parsed;
     }
 
+    /** 解析 queries 数组为子查询列表；非数组 → 空，坏元素跳过，至多 maxQueries 条。 */
+    private static List<SubQuery> parseSubQueries(JsonNode queries, int maxQueries) {
+        if (!queries.isArray()) {
+            return List.of();
+        }
+        List<SubQuery> result = new ArrayList<>();
+        for (JsonNode q : queries) {
+            String qq = q.path("query").asText(null);
+            String goal = q.path("researchGoal").asText("");
+            if (qq != null && !qq.isBlank()) {
+                result.add(new SubQuery(qq.trim(), goal == null ? "" : goal.trim()));
+            }
+            if (result.size() >= maxQueries) {
+                break;
+            }
+        }
+        return result;
+    }
+
     List<SubQuery> parse(String raw, int maxQueries) {
         for (String candidate : candidates(raw)) {
             try {
                 JsonNode root = mapper.readTree(candidate);
-                JsonNode queries = root.path("queries");
-                if (!queries.isArray()) {
-                    continue;
-                }
-                List<SubQuery> result = new ArrayList<>();
-                for (JsonNode q : queries) {
-                    String qq = q.path("query").asText(null);
-                    String goal = q.path("researchGoal").asText("");
-                    if (qq != null && !qq.isBlank()) {
-                        result.add(new SubQuery(qq.trim(), goal == null ? "" : goal.trim()));
-                    }
-                    if (result.size() >= maxQueries) {
-                        break;
-                    }
-                }
+                List<SubQuery> result = parseSubQueries(root.path("queries"), maxQueries);
                 if (!result.isEmpty()) {
                     return result;
                 }

@@ -24,10 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * I 批专项测试（对标 gpt-researcher skills/deep_research.py）：
- * 澄清前奏（research_plan 应用/降级）、I-7 per-query 独立提炼（分组/空分支跳过）、
+ * 澄清前奏（research_plan 应用/降级）、per-query 独立提炼（分组/空分支跳过）、
  * 来源质量闸（curate 保序精选/坏输出回退/全删回退）。
  */
-class DeepResearchGraphIBatchTest {
+class GraphClarifyExtractCurateTest {
 
     /** 可控 mock LLM：按 system 关键词分流 research-plan / curate / extract。 */
     static class MockLlm implements LlmClient {
@@ -204,7 +204,7 @@ class DeepResearchGraphIBatchTest {
     }
 
     // ------------------------------------------------------------------
-    // I-7 per-query 独立提炼
+    // per-query 独立提炼
     // ------------------------------------------------------------------
 
     @Test

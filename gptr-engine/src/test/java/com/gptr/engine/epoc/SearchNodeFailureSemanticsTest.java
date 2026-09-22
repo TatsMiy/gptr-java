@@ -11,13 +11,14 @@ import java.util.Map;
 import java.util.concurrent.CompletionException;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
+import org.bsc.langgraph4j.action.AsyncNodeAction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 检索失败语义（2026-09-17）——两种失败形态必须与「确实没结果」可分。
+ * 检索失败语义——两种失败形态必须与「确实没结果」可分。
  *
  * <p>背景：{@code SearchNode#safeSearch} 原先静默 {@code return SearchResponse.empty()}，
   * 被三份审计点名却从未修。失败不可见时，
@@ -62,7 +63,7 @@ class SearchNodeFailureSemanticsTest {
         SearchClient boom = client("boom", q -> {
             throw new TransientApiException("boom", "network down");
         });
-        var action = SearchNode.realSearch(boom, SearchOptions.DEFAULT, Budgets.defaults().retrieval());
+        var action = searchAction(boom);
 
         CompletionException ex = assertThrows(CompletionException.class,
                 () -> action.apply(stateOf("q1", "q2")).join(),
@@ -81,7 +82,7 @@ class SearchNodeFailureSemanticsTest {
             }
             return new SearchResponse(List.of(), "mock-ok"); // 这一条成功但无结果
         });
-        var action = SearchNode.realSearch(mixed, SearchOptions.DEFAULT, Budgets.defaults().retrieval());
+        var action = searchAction(mixed);
 
         Map<String, Object> updates = action.apply(stateOf("q1", "q2")).join();
         assertTrue(updates.containsKey(DeepResearchState.K_SEARCH_RESULTS),
@@ -92,10 +93,17 @@ class SearchNodeFailureSemanticsTest {
     @Test
     void allQueriesEmptyDoesNotFailTheNode() {
         SearchClient emptyOk = client("empty-ok", q -> new SearchResponse(List.of(), "mock-ok"));
-        var action = SearchNode.realSearch(emptyOk, SearchOptions.DEFAULT, Budgets.defaults().retrieval());
+        var action = searchAction(emptyOk);
 
         Map<String, Object> updates = action.apply(stateOf("q1", "q2")).join();
         assertEquals("", updates.get(DeepResearchState.K_SEARCH_RESULTS),
                 "全 0 结果应产出空检索串，而不是抛异常");
     }
+
+    /** 节点动作（装配层形态：node_async 包装同步业务方法；异常须包进 Future）。 */
+    private static AsyncNodeAction<DeepResearchState> searchAction(SearchClient client) {
+        return AsyncNodeAction.node_async(state -> SearchNode.runSearch(
+                state, client, SearchOptions.DEFAULT, Budgets.defaults().retrieval()));
+    }
+
 }

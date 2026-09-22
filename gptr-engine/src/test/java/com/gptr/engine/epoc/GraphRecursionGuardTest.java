@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 深研升级专项测试：守卫（空 learnings 提前 END）、breadth 衰减、
  * visited 防重抓、followUpDriven=false 兼容旧线性加深。
  */
-class DeepResearchGraphE3Test {
+class GraphRecursionGuardTest {
 
     /** 可控 mock LLM：记录 (system,user)；可配空 learnings。 */
     static class MockLlm implements LlmClient {
@@ -110,7 +110,7 @@ class DeepResearchGraphE3Test {
                                                        MockScraper scraper, boolean fetchFullPage,
                                                        int maxScrapeUrls, boolean followUpDriven,
                                                        double decay) throws Exception {
-        // I 批 helper：clarify=0（E3 语义测试不引入澄清前奏）、per-query 提炼开（生产默认）
+        // 本类 helper：clarify=0（守卫语义测试不引入澄清前奏）、per-query 提炼开（生产默认）
         return DeepResearchGraph.buildReal(
                 new DeepResearchGraph.GraphDeps(llm, search, scraper, new DistillGate(3), null,
                         cost -> {
@@ -130,7 +130,7 @@ class DeepResearchGraphE3Test {
     void guardStopsEarlyWhenRoundHasNoLearnings() throws Exception {
         MockLlm llm = new MockLlm();
         llm.emptyLearnings = true;
-        DeepResearchGraphE3Test.MockSearch search = new DeepResearchGraphE3Test.MockSearch();
+        GraphRecursionGuardTest.MockSearch search = new GraphRecursionGuardTest.MockSearch();
         CompiledGraph<DeepResearchState> graph = realGraph(llm, search, null, false, 0, true, 0.5);
 
         DeepResearchState state = graph.invoke(Map.of("query", "t", "breadth", 2, "depth", 3))
@@ -138,7 +138,7 @@ class DeepResearchGraphE3Test {
 
         assertEquals(1, state.currentDepth(), "守卫：首层无 learnings 应立即 END，不空跑 depth 3");
         assertTrue(state.learnings().isEmpty());
-        // I-7：per-query 提炼 = breadth 次 extract 调用（本轮 2 个 query 各 1 次）
+        // per-query 提炼 = breadth 次 extract 调用（本轮 2 个 query 各 1 次）
         long extractCalls = llm.systems.stream()
                 .filter(s -> s.contains("analyzing search results")).count();
         assertEquals(2, extractCalls, "per-query 提炼应按 query 数各调一次");
@@ -147,7 +147,7 @@ class DeepResearchGraphE3Test {
     @Test
     void breadthDecaysNextLayerQueries() throws Exception {
         MockLlm llm = new MockLlm();
-        DeepResearchGraphE3Test.MockSearch search = new DeepResearchGraphE3Test.MockSearch();
+        GraphRecursionGuardTest.MockSearch search = new GraphRecursionGuardTest.MockSearch();
         CompiledGraph<DeepResearchState> graph = realGraph(llm, search, null, false, 0, true, 0.5);
 
         graph.invoke(Map.of("query", "t", "breadth", 4, "depth", 2)).orElseThrow();
@@ -162,7 +162,7 @@ class DeepResearchGraphE3Test {
         assertTrue(followupIdx >= 0, "follow_up_queries 节点应被调用");
         assertTrue(llm.users.get(followupIdx).contains("Generate 2 follow-up"),
                 "衰减后应为 2 个查询: " + llm.users.get(followupIdx));
-        // I-7：learnings 累积 = 层1 4 query×1 条 + 层2 2 query×1 条
+        // learnings 累积 = 层1 4 query×1 条 + 层2 2 query×1 条
         assertEquals(6, graph.invoke(Map.of("query", "t", "breadth", 4, "depth", 2))
                 .orElseThrow().learnings().size());
     }
@@ -170,8 +170,8 @@ class DeepResearchGraphE3Test {
     @Test
     void visitedUrlsPreventRescrapeAcrossLayers() throws Exception {
         MockLlm llm = new MockLlm();
-        DeepResearchGraphE3Test.MockSearch search = new DeepResearchGraphE3Test.MockSearch();
-        DeepResearchGraphE3Test.MockScraper scraper = new DeepResearchGraphE3Test.MockScraper();
+        GraphRecursionGuardTest.MockSearch search = new GraphRecursionGuardTest.MockSearch();
+        GraphRecursionGuardTest.MockScraper scraper = new GraphRecursionGuardTest.MockScraper();
         CompiledGraph<DeepResearchState> graph =
                 realGraph(llm, search, scraper, true, 5, true, 0.5);
 
@@ -186,7 +186,7 @@ class DeepResearchGraphE3Test {
     @Test
     void followUpDrivenFalseKeepsOriginalQueryPerLayer() throws Exception {
         MockLlm llm = new MockLlm();
-        DeepResearchGraphE3Test.MockSearch search = new DeepResearchGraphE3Test.MockSearch();
+        GraphRecursionGuardTest.MockSearch search = new GraphRecursionGuardTest.MockSearch();
         CompiledGraph<DeepResearchState> graph = realGraph(llm, search, null, false, 0, false, 0.5);
 
         graph.invoke(Map.of("query", "original-topic", "breadth", 1, "depth", 2)).orElseThrow();

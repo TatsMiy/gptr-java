@@ -14,7 +14,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,24 +25,16 @@ final class ExtractNode {
     private ExtractNode() {
     }
 
-    /** I-7：per-query 独立提炼——每子查询用自己的结果条目组单独调 LLM（对标 py
+    /** per-query 独立提炼——每子查询用自己的结果条目组单独调 LLM（对标 py
      *  process_query → process_research_results）。单分支失败/空上下文 → 记 0 跳过
      *  （不杀整轮）；全层 learnings 为 0 → 守卫 END。上下文 = 该 query 的条目组
      *  （joinCap 为组上下文预算；sourceDistill 开时放大以覆盖长正文）。
      *  产出结构化 EvidenceNote 写入 evidenceBank（String 承载，checkpoint 兼容），
      *  learnings 保持为 bank 的渲染视图——同一合并处单点双写，下游零改动。 */
-    static AsyncNodeAction<DeepResearchState> realExtractPerQuery(
-            LlmClient llm, DoubleConsumer costCallback, ExtractionBudget extraction,
-            boolean extractOnDistilled) {
-        return state -> CompletableFuture.supplyAsync(
-                () -> runPerQueryExtract(state, llm, costCallback, extraction, extractOnDistilled));
-    }
-
-    /** {@link #realExtractPerQuery} 的实现体（原 lambda 体逐字搬入，缩进 −2 层）。 */
-    private static Map<String, Object> runPerQueryExtract(DeepResearchState state, LlmClient llm,
-                                                         DoubleConsumer costCallback,
-                                                         ExtractionBudget extraction,
-                                                         boolean extractOnDistilled) {
+    static Map<String, Object> runPerQueryExtract(DeepResearchState state, LlmClient llm,
+                                                 DoubleConsumer costCallback,
+                                                 ExtractionBudget extraction,
+                                                 boolean extractOnDistilled) {
         List<String> queries = state.queries();
         List<List<String>> items = state.queryItems();
         if (queries.isEmpty()) {
@@ -81,7 +72,7 @@ final class ExtractNode {
         List<String> bank = new ArrayList<>(state.evidenceBank());
         int depth = state.currentDepth() + 1;
         int round = 0;
-        // M-2026（实测驱动）：(sourceUrl, insight) 去重——Y 臂直通时同 URL 蒸馏块经
+        // 实测驱动：(sourceUrl, insight) 去重——Y 臂直通时同 URL 蒸馏块经
         // appendToGroupsReferencing 进多个查询组，每组直通同一批句 → 跨组重复（q04-Y 单
         // URL max 248 条实证）。页级蒸馏无查询视角，跨组复制零信息增益。保留首组归属。
         Set<String> seenNotes = new HashSet<>();
@@ -108,7 +99,7 @@ final class ExtractNode {
                         r.insight(), quote, url);
                 bank.add(note.toJson());
                 learnings.add(note.renderLearningText());
-                round++; // E3 守卫输入（实际新增数——去重后同旧语义口径）
+                round++; // 守卫输入：实际新增数（去重后）
             }
         }
         List<String> doneFollowUps = new ArrayList<>();
@@ -122,9 +113,9 @@ final class ExtractNode {
         updates.put(DeepResearchState.K_EVIDENCE_BANK, bank);
         updates.put(DeepResearchState.K_LEARNINGS, learnings);
         updates.put(DeepResearchState.K_FOLLOW_UP_QUESTIONS, followUps);
-        updates.put(DeepResearchState.K_ROUND_LEARNINGS, round); // E3 守卫输入
+        updates.put(DeepResearchState.K_ROUND_LEARNINGS, round); // 守卫输入：本轮新增 learnings 数
         updates.put(DeepResearchState.K_CURRENT_DEPTH, state.currentDepth() + 1);
-        // 批 2 诊断：分支产出/去重丢弃（Y 臂直通句跨组重复会被丢——覆盖补查是否真增益看这里）
+        // 诊断：分支产出/去重丢弃（Y 臂直通句跨组重复会被丢——覆盖补查是否真增益看这里）
         StringBuilder perBranch = new StringBuilder();
         for (int i = 0; i < branchRaws.size(); i++) {
             List<EvidenceNote.Raw> raws = branchRaws.get(i);
@@ -146,7 +137,7 @@ final class ExtractNode {
                                    BranchInput input, List<List<EvidenceNote.Raw>> branchRaws,
                                    List<List<String>> branchFollowUps, ExtractionBudget extraction) {
         List<String> group = idx < items.size() ? items.get(idx) : List.of();
-        // M-2026：Y 臂（extractOnDistilled=false）→ [DISTILLED] 句块由 Java 直通
+        // Y 臂（extractOnDistilled=false）→ [DISTILLED] 句块由 Java 直通
         // note（insight=原句，URL 程序化注入，无二次 LLM 加工）；RAW 条目照旧提炼。
         // X 臂（true）→ 蒸馏句块同 RAW 一起进 LLM 提炼（双臂实验）。
         List<EvidenceNote.Raw> direct = new ArrayList<>();
@@ -167,7 +158,7 @@ final class ExtractNode {
         }
         List<EvidenceNote.Raw> llmRaws = new ArrayList<>();
         List<String> llmFollowUps = new ArrayList<>();
-        // C3-S1：RAW 组为空 → 不调 LLM（防空上下文编造）
+        // RAW 组为空 → 不调 LLM（防空上下文编造）
         boolean llmNeeded = llmGroup.stream().anyMatch(s -> s != null && !s.isBlank());
         if (llmNeeded) {
             // 组内拼接后实际进 prompt 的字符数（B6.2 排障口径：W→A 段的观测点）。
@@ -215,18 +206,11 @@ final class ExtractNode {
     }
 
     /** 旧路径（perQueryExtract=false）：整层 searchResults 一次性提炼 learnings + 追问。 */
-    static AsyncNodeAction<DeepResearchState> realExtractRound(
-            LlmClient llm, DoubleConsumer costCallback, ExtractionBudget extraction) {
-        return state -> CompletableFuture.supplyAsync(
-                () -> runExtractRound(state, llm, costCallback, extraction));
-    }
-
-    /** {@link #realExtractRound} 的实现体（原 lambda 体逐字搬入，缩进 −2 层）。 */
-    private static Map<String, Object> runExtractRound(DeepResearchState state, LlmClient llm,
-                                                       DoubleConsumer costCallback,
-                                                       ExtractionBudget extraction) {
+    static Map<String, Object> runExtractRound(DeepResearchState state, LlmClient llm,
+                                               DoubleConsumer costCallback,
+                                               ExtractionBudget extraction) {
         String context = state.searchResults();
-        // C3-S1：检索证据为空（搜索全失败/空结果）时不调 LLM——避免模型在空上下文上
+        // 检索证据为空（搜索全失败/空结果）时不调 LLM——避免模型在空上下文上
         // "提炼"编造 learnings（roundLearnings>0 会绕过守卫）；直接记 0 走守卫 END
         if (context.isBlank()) {
             Map<String, Object> updates = new HashMap<>();
@@ -254,7 +238,7 @@ final class ExtractNode {
         Map<String, Object> updates = new HashMap<>();
         updates.put(DeepResearchState.K_LEARNINGS, learnings);
         updates.put(DeepResearchState.K_FOLLOW_UP_QUESTIONS, followUps);
-        updates.put(DeepResearchState.K_ROUND_LEARNINGS, parsed.learnings().size()); // E3 守卫输入
+        updates.put(DeepResearchState.K_ROUND_LEARNINGS, parsed.learnings().size()); // 守卫输入：本轮新增 learnings 数
         updates.put(DeepResearchState.K_CURRENT_DEPTH, state.currentDepth() + 1);
         return updates;
     }

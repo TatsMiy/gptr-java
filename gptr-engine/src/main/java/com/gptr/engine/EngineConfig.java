@@ -65,12 +65,12 @@ final class EngineConfig {
     /** 澄清追问前奏问题数（0=关；默认 3=对标 py 深研恒有 research-plan）。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final int clarifyQuestions;
-    /** I-7：extract 按子查询独立提炼（默认 true=对标 py 每子查询独立研究；false=旧整层一次）。 */
+    /** extract 按子查询独立提炼（默认 true=对标 py 每子查询独立研究；false=旧整层一次）。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final boolean perQueryExtract;
-    /** 来源质量闸（**默认 false** —— 2026-09-20 翻关；原为 true：2026-09-13 三题双臂实测
-     *  "跨领域噪声 11 处 → 0、兜底节 43 条 → 3 条"后翻转默认值）。
-     *  <p>⚠️ 翻关依据：那次验收的**适用域未覆盖"组内条目数 > {@link #curatorMaxSources}"区间** ——
+    /** 来源质量闸（**默认 false**）。三题双臂实测曾显示
+     *  "跨领域噪声 11 处 → 0、兜底节 43 条 → 3 条"（当时据此默认开）。
+     *  <p>⚠️ 改为默认 false 的依据：那次验收的**适用域未覆盖"组内条目数 > {@link #curatorMaxSources}"区间** ——
      *  当时 {@code maxResults} 为默认 5 ⇒ 组内 7 条 &lt; 10 ⇒ 两道闸（保留数 / 候选可见性）
      *  **均未触发，curate 实为空转**。而一旦组内条目数越过该闸（如 {@code maxResults=20}），
      *  排在组尾的**已抓取正文块被整批丢弃**：实测 note 62 → 34、extract {@code joinedChars}
@@ -93,28 +93,28 @@ final class EngineConfig {
     @ConfigKey(kind = Kind.UNVERIFIED, owner = "gptr-dev", added = "2026-09-17",
             reason = "缺证据：测试零引用该键，无任何验收记录；默认值来源只是抄 py max_results=10")
     final int curatorMaxSources;
-    /** P0-4：禁止来源列表（URL 前缀或域名）；空 = 不屏蔽。引擎检索/抓取层直接过滤。 */
+    /** 禁止来源列表（URL 前缀或域名）；空 = 不屏蔽。引擎检索/抓取层直接过滤。 */
     @ConfigKey(kind = Kind.UNVERIFIED, owner = "gptr-dev", added = "2026-09-17",
                         reason = "缺证据：解析与装饰器装配零测试；且 flat 路径绕过 BlockedSearchClient")
     final List<String> blockedUrls;
-    /** J3：来源提炼开关（默认关=现有截断兜底）。开：抓取取更长正文（distillMaxChars），
+    /** 来源提炼开关（默认关=现有截断兜底）。开：抓取取更长正文（distillMaxChars），
      *  flat 由 LLM 提炼要点（长网页后半不再丢核心数据）；deep 的 extract 读长正文提炼。 */
     @ConfigKey(kind = Kind.UNVERIFIED, owner = "gptr-dev", added = "2026-09-17",
             reason = "2026-09-19 已补 on/off 同题对照（R2 vs R6，唯一变量=本键）：结论 tie=交换项"
                     + "（开 ⇒ 具名基准 7 vs 0、note 64 vs 32、honesty 胜；关 ⇒ 中文 71.1% vs 45.5%、成本 −20%）"
                                         + "⇒ 默认保持 false；是否翻转待定（故本键暂无法归入 STABLE）")
     final boolean sourceDistill;
-    /** J3：进提炼的正文上限（字符）。默认 20000（覆盖长网页主体）。 */
+    /** 进提炼的正文上限（字符）。默认 20000（覆盖长网页主体）。 */
     @ConfigKey(kind = Kind.UNVERIFIED, owner = "gptr-dev", added = "2026-09-17",
             reason = "缺证据：无 20000 vs 50000 对照；注入仅对 acpt_run.py 成立，文档与脚本不符")
     final int distillMaxChars;
-    /** 深研素材增强（M-2026）：每页蒸馏并发上限（Semaphore，进程级语义；仅 sourceDistill=true
+    /** 深研素材增强：每页蒸馏并发上限（Semaphore，进程级语义；仅 sourceDistill=true
      *  且 deep 路径使用；默认 3——防 20k 长文并发 burst 打爆 API TPM）。 */
     @ConfigKey(kind = Kind.UNVERIFIED, owner = "gptr-dev", added = "2026-09-17",
                         reason = "缺证据：任务级该键已失效（快照打 IGNORED），应用级真实峰值从未观测")
     final int distillConcurrency;
-    /** 深研素材增强（M-2026）：extract 对 [DISTILLED] 选句块是否做 LLM 二次提炼。
-     *  **默认 false（Y 臂：蒸馏句 Java 直通 note——2026-09-10 三题双臂物料验收后翻转默认值）**：
+    /** 深研素材增强：extract 对 [DISTILLED] 选句块是否做 LLM 二次提炼。
+     *  **默认 false（Y 臂：蒸馏句 Java 直通 note——三题双臂物料验收支持此默认）**：
      *  Y 臂 bank 342-383 条/75-89k 字符、报告 16.2-29.6k（追平 py）、成本 $0.038-0.042，
      *  全面优于 X 臂（提炼：43-55 条/16.6-20.9k、报告 7.5-8.4k、$0.041-0.057）；
      *  true = X 臂（蒸馏句仍走 extract 提炼，保留为对照/回退配置）。仅 sourceDistill=true 时生效。 */
@@ -123,7 +123,7 @@ final class EngineConfig {
             evidence = "2026-09-10 三题双臂物料验收：直通臂在体量/报告长度/成本三项全面优于提炼臂"
                     + "（关键点遗漏率口径尚未对照，不阻塞结案）")
     final boolean extractOnDistilled;
-    /** J3：研报语言（默认"中文"；zh/中文→中文，en/english→English，其它透传）。 */
+    /** 研报语言（默认"中文"；zh/中文→中文，en/english→English，其它透传）。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final String language;
     /** 层间计划反思（默认 true：每层 extract 后生成中央研究状态 researchState，
@@ -135,7 +135,7 @@ final class EngineConfig {
      *  evidenceBank 空（旧整层路径）或 outline 失败时自动回退单遍。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final boolean sectionWriting;
-    /** M-2026：回退/单遍写作上下文预算（字符）。默认值**不再硬编码**，由
+    /** 回退/单遍写作上下文预算（字符）。默认值**不再硬编码**，由
      *  {@code Budgets.defaults().writing().contextMaxChars()} 供给（原为
      *  {@code ContextManager.DEFAULT_MAX_CHARS}=12000）；
      *  评测扩容场景经此键注入）。 */
@@ -148,7 +148,7 @@ final class EngineConfig {
      *  已写节注入：把已写完的小节注入后续小节上下文，抑制节间重复。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-19")
     final int priorSectionsMaxChars;
-    /** 批 2：大纲节数上限（outline prompt 与解析 cap 同源；默认 6，评测批可配 8）。 */
+    /** 大纲节数上限（outline prompt 与解析 cap 同源；默认 6，评测批可配 8）。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final int maxSections;
     /** 节级引用闸门发现节外引用时是否重写 1 次（默认只记录，同现 WRITING 行为）。 */
@@ -157,33 +157,33 @@ final class EngineConfig {
     final boolean sectionRetryOnUnauthorized;
     /** 首层查询的覆盖机制。`dimensions`（默认）=LLM 一次给出"维度→查询"
      *  完整映射，Java 机械校验每维度有查询 + 总数 ≥ breadth（缺则补一次）；
-     *  `legacy`=批 2 自检补查（LLM 自证缺失维度，判定随机，保留为对照/回滚）；
-     *  `off`=批 1 行为（旧 prompt 裸 queries，不生成维度、不补查）——4 格对照的基线档。 */
+     *  `legacy`=自检补查（LLM 自证缺失维度，判定随机，保留为对照/回滚）；
+     *  `off`=初始行为（裸 queries，不生成维度、不补查）——4 格对照的基线档。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final String coverMode;
-    /** 抓取配额模式。`linked`（默认，2026-09-10 4 格对照后翻转默认值）
+    /** 抓取配额模式。`linked`（默认；4 格对照实测优于 `flat`）
      *  =按查询组数联动配额 + 组轮转分配（每组保底名额，防前几条查询吃满）；
      *  依据：dims + flat 实测 3/5 组零产出（60% 维度白生成），dims + linked 为 0/6；
      *  linked 在查询少时配额 = min（默认 8）不增成本。
      *  `flat` = 现状（按查询顺序取前 maxScrapeUrls），保留为回退/对照档。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final String scrapeQuotaMode;
-    /** 批 4-pre：linked 模式下每查询组名额（默认 2）。 */
+    /** linked 模式下每查询组名额（默认 2）。 */
     @ConfigKey(kind = Kind.OPS, owner = "gptr-dev", added = "2026-09-17")
     final int scrapePerQueryQuota;
-    /** 批 4-pre：linked 模式配额下界（默认 8 = 现状值，保证只增不减）。 */
+    /** linked 模式配额下界（默认 8 = 现状值，保证只增不减）。 */
     @ConfigKey(kind = Kind.OPS, owner = "gptr-dev", added = "2026-09-17")
     final int scrapeMinQuota;
-    /** 批 4-pre：linked 模式配额上界（默认 16，成本护栏）。 */
+    /** linked 模式配额上界（默认 16，成本护栏）。 */
     @ConfigKey(kind = Kind.OPS, owner = "gptr-dev", added = "2026-09-17")
     final int scrapeHardCap;
-    /** 归节模式。true（**2026-09-17 转正为默认**）= **直引优先**（大纲写 evidenceIdx，
+    /** 归节模式。true（**默认**）= **直引优先**（大纲写 evidenceIdx，
      *  多对多，未引者入兜底节）；false = 现有文本匹配单归属（保留为**显式回退**，不再是默认）。
-     *  <p>转正依据（{@code state = CLOSED_FLIPPED}）：① 批 4 三题验收（F10 全 0、报告 +67%、
-     *  引用 33/51/46、成本反降）；② 2026-09-17 默认路径实测复发 **3 次 F10（≥2 次错位型）**
-     *  ⇒ 旧路径确在产生缺陷；③ **F10 前兆观测只存在于本开关为 true 的分支**
-      *  （{@code ResearchEngineImpl#groupBySection}）—— 不转正则 F10 始终**不可观测**。
-      *  <p>✅ 质量盲判**已于 2026-09-19 补齐**：干净对照 R2 vs R4
+     *  <p>转正依据（{@code state = CLOSED_FLIPPED}）：① 三题验收（空证据节占位 0 个、报告 +67%、
+     *  引用 33/51/46、成本反降）；② 默认路径实测复发 **3 次该占位（≥2 次错位型）**
+     *  ⇒ 旧路径确在产生缺陷；③ **占位前兆观测只存在于本开关为 true 的分支**
+      *  （{@code ResearchEngineImpl#groupBySection}）—— 不转正则该占位始终**不可观测**。
+      *  <p>✅ 质量盲判：干净对照 R2 vs R4
      *  （唯一变量 = 本键，两臂同为 bocha+蒸馏+rank）⇒ `overall` 与 `honesty_restraint` 双跑一致判
      *  `true` 更优，胜因 = 消除尾部两节整节塌陷（占位 2→0）、成本不变。
      *  ⚠️ 遗留代价：`true` 会引入同事实复述 ×3–5（未解决）。 */
@@ -193,7 +193,7 @@ final class EngineConfig {
                     + " + 2026-09-19 唯一变量干净对照、双跑盲判：空节 2→0、引用 ×1.84、成本不变")
     final boolean assignByCitation;
     /** 证据目录**上限**（默认 40000；≤0 → SectionWriter 默认值）。
-     *  2026-09-13：12000 → 40000——实测 195 条证据 ≈21k 字符，12000 时被截断 31%，被截证据
+     *  上限 40000——实测 195 条证据 ≈21k 字符，12000 时被截断 31%，被截证据
      *  LLM 看不见 → 无法直引 → 全进兜底组（抓取改善的素材增量被上限吃掉）。语义是"内容实际
      *  长度封顶"：证据少时内容本就短，不补齐；多时才截断。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
@@ -220,30 +220,30 @@ final class EngineConfig {
         int scrapeVal = 8;
         boolean followUpVal = true;
         double decayVal = 0.5;
-        int clarifyVal = 3;       // I-8：默认开（对标 py research-plan 恒执行）
-        boolean perQueryVal = true; // I-7：默认开（对标 py per-query 独立提炼）
-        boolean curateVal = false;  // I-6：默认关（2026-09-20 翻关；依据与适用域边界见字段 javadoc）
-        boolean sourceRankVal = true;  // 关口 A：默认开（2026-09-19 转正：P1 干净对照双跑 6 维一致）
-        int curatorMaxVal = 10;     // I-6：py max_results=10
-        List<String> blockedVal = List.of(); // P0-4：空=不屏蔽
-        boolean distillVal = false; // J3：默认关=截断兜底
-        int distillMaxVal = 20000;  // J3：提炼正文上限
-        int distillConcVal = 3;     // M-2026：蒸馏并发（进程级信号量）
-        boolean extractDistillVal = false; // M-2026：Y 臂默认（2026-09-10 验收后翻转默认值——直通全面更优）
-        String languageVal = "中文"; // J3：默认中文
-        boolean planReflectVal = true; // J6：默认开（+1 调用/层）
-        boolean sectionVal = true;      // P2-2：默认 true（A/B 通过后翻转默认值；可显式关）
-        int sectionCharsVal = 6000;     // P2-2：每节证据预算
-        int maxSectionsVal = 6;         // 批 2：大纲节数上限（prompt+解析同源）
-        int priorSectionsMaxCharsVal = 24000; // 2026-09-19：已写节注入预算（≤0 = 关闭 = 现状）
+        int clarifyVal = 3;       // 默认开（对标 py research-plan 恒执行）
+        boolean perQueryVal = true; // 默认开（对标 py per-query 独立提炼）
+        boolean curateVal = false;  // 默认关（依据与适用域边界见字段 javadoc）
+        boolean sourceRankVal = true;  // 关口 A：默认开（P1 干净对照双跑 6 维一致）
+        int curatorMaxVal = 10;     // 与 py max_results 对齐
+        List<String> blockedVal = List.of(); // 空=不屏蔽
+        boolean distillVal = false; // 默认关=截断兜底
+        int distillMaxVal = 20000;  // 提炼正文上限
+        int distillConcVal = 3;     // 蒸馏并发（进程级信号量）
+        boolean extractDistillVal = false; // Y 臂默认（直通全面更优）
+        String languageVal = "中文"; // 默认中文
+        boolean planReflectVal = true; // 默认开（+1 调用/层）
+        boolean sectionVal = true;      // 默认 true（可显式关）
+        int sectionCharsVal = 6000;     // 每节证据预算
+        int maxSectionsVal = 6;         // 大纲节数上限（prompt+解析同源）
+        int priorSectionsMaxCharsVal = 24000; // 已写节注入预算（≤0 = 关闭）
         int contextCharsVal = Budgets.defaults().writing().contextMaxChars(); // 默认值由预算载体供给
-        boolean sectionRetryVal = false; // P2-2：节级违规重写（默认只记录）
+        boolean sectionRetryVal = false; // 节级违规重写（默认只记录）
         String coverModeVal = "dimensions";   // 维度清单机械下界
-        String quotaModeVal = "linked";       // 批 4-pre：抓取配额（2026-09-10 4 格对照后翻转默认值）
-        int perQueryQuotaVal = 2;             // 批 4-pre：每查询组名额
-        int minQuotaVal = 8;                  // 批 4-pre：配额下界（=现状 maxScrapeUrls）
-        int hardCapVal = 16;                  // 批 4-pre：配额上界（成本护栏）
-        boolean assignByCitationVal = true;   // 批 4：归节模式（2026-09-17 **转正为默认**；显式设 false 回退）
+        String quotaModeVal = "linked";       // 抓取配额（4 格对照实测更优）
+        int perQueryQuotaVal = 2;             // 每查询组名额
+        int minQuotaVal = 8;                  // 配额下界（=现状 maxScrapeUrls）
+        int hardCapVal = 16;                  // 配额上界（成本护栏）
+        boolean assignByCitationVal = true;   // 归节模式（默认；显式设 false 回退）
         int evidenceIndexCharsVal = 40000;    // 证据目录上限（原 12000 时 195 条证据截断 31%）
         try {
             JsonNode root = MAPPER.readTree(config == null ? "{}" : config);
@@ -310,16 +310,16 @@ final class EngineConfig {
             if (curatorMaxNode.isInt() && curatorMaxNode.asInt() > 0) {
                 curatorMaxVal = curatorMaxNode.asInt();
             }
-            // P0-4（对标 Bench II）：禁止来源（URL 前缀或域名）——评测防泄漏用；
+            // 禁止来源（对标 Bench II）：URL 前缀或域名，用于评测防泄漏；
             // 引擎在检索/抓取层直接屏蔽，比"prompt 阻断"更彻底（产品侧同样适用：排除站点）
             JsonNode blockedNode = root.path("blockedUrls");
             if (blockedNode.isArray()) {
+                // 非文本元素先落成空串、最后统一剔除空白——这样循环里不必再套一层 if
                 List<String> list = new ArrayList<>();
                 for (JsonNode b : blockedNode) {
-                    if (b.isTextual() && !b.asText().isBlank()) {
-                        list.add(b.asText().trim());
-                    }
+                    list.add(b.isTextual() ? b.asText().trim() : "");
                 }
+                list.removeIf(String::isBlank);
                 if (!list.isEmpty()) {
                     blockedVal = list;
                 }
@@ -348,7 +348,7 @@ final class EngineConfig {
             if (reflectNode.isBoolean()) {
                 planReflectVal = reflectNode.asBoolean();
             }
-            // 批 4-pre：覆盖机制档位（dimensions/legacy/off——非法值保持默认 dimensions）
+            // 覆盖机制档位（dimensions/legacy/off——非法值保持默认 dimensions）
             JsonNode coverNode = root.path("coverMode");
             if (coverNode.isTextual()) {
                 String m = coverNode.asText().trim().toLowerCase(Locale.ROOT);
@@ -356,7 +356,7 @@ final class EngineConfig {
                     coverModeVal = m;
                 }
             }
-            // 批 4-pre：抓取配额档位（flat/linked——非法值保持默认 linked）
+            // 抓取配额档位（flat/linked——非法值保持默认 linked）
             JsonNode quotaNode = root.path("scrapeQuotaMode");
             if (quotaNode.isTextual()) {
                 String m = quotaNode.asText().trim().toLowerCase(Locale.ROOT);
@@ -377,7 +377,7 @@ final class EngineConfig {
             if (hardCapNode.isInt() && hardCapNode.asInt() >= 1 && hardCapNode.asInt() <= 40) {
                 hardCapVal = hardCapNode.asInt();
             }
-            // 批 4：直引归节开关 + 证据目录预算
+            // 直引归节开关 + 证据目录预算
             JsonNode citationNode = root.path("assignByCitation");
             if (citationNode.isBoolean()) {
                 assignByCitationVal = citationNode.asBoolean();
@@ -394,7 +394,7 @@ final class EngineConfig {
             if (sectionCharsNode.isInt() && sectionCharsNode.asInt() > 500) {
                 sectionCharsVal = sectionCharsNode.asInt();
             }
-            // 2026-09-19：已写节注入预算。⚠️ 校验域是 >= 0（0 = 合法关闭档），不是 > 0
+            // 已写节注入预算。⚠️ 校验域是 >= 0（0 = 合法关闭档），不是 > 0
             JsonNode priorSectionsNode = root.path("priorSectionsMaxChars");
             if (priorSectionsNode.isInt() && priorSectionsNode.asInt() >= 0) {
                 priorSectionsMaxCharsVal = priorSectionsNode.asInt();
@@ -411,7 +411,7 @@ final class EngineConfig {
             if (sectionRetryNode.isBoolean()) {
                 sectionRetryVal = sectionRetryNode.asBoolean();
             }
-            // P0 mock 测试旋钮：仅 allowMock（显式测试配置）时生效（C3-S2 剥离）
+            // P0 mock 测试旋钮：仅 allowMock（显式测试配置）时生效
             if (allowMock) {
                 JsonNode mockNode = root.path("mock");
                 JsonNode failNode = mockNode.path("failAtStage");
@@ -428,8 +428,7 @@ final class EngineConfig {
                 }
             }
         } catch (Exception e) {
-            // 【2026-09-14 修复】原为 `catch (Exception ignored)` + 空注释：一份打错的 config JSON
-            // 会让**整份配置静默退回默认值**（depth / sourceDistill / distillMaxChars / curate …
+            // 一份打错的 config JSON 会让**整份配置静默退回默认值**（depth / sourceDistill / distillMaxChars / curate …
             // 一起退），任务照跑、指标照算 —— 生产上表现为"我改了配置但没生效"，是最难查的一类问题。
             // 保留降级语义（不因配置解析失败而让任务失败），但必须留痕。
             LOG.warn("[config] engine config 解析失败，整份退回默认值: {}", e.toString());

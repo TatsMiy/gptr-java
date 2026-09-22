@@ -76,7 +76,7 @@ class TaskStateMachineTest {
                 // 例外：FAILED + RETRY → PENDING（运维重试入状态机）
                 if (terminal == TaskStatus.FAILED && event == TaskEventType.RETRY) {
                     assertTrue(TaskStateMachine.canTransition(terminal, event),
-                            "FAILED + RETRY 必须合法（C3-S4 运维重试）");
+                            "FAILED + RETRY 必须合法（运维重试语义）");
                     continue;
                 }
                 assertFalse(TaskStateMachine.canTransition(terminal, event),

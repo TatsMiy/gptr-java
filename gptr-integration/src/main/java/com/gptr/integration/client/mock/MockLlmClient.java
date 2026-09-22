@@ -118,7 +118,7 @@ public class MockLlmClient implements LlmClient {
                 return PLAN_JSON;
             }
             if (systemPrompt.contains("research report planner")) {
-                return OUTLINE_JSON; // P2-2 大纲契约（否则回 learnings 导致降级单遍假绿）
+                return OUTLINE_JSON; // 大纲契约（否则回 learnings 导致降级单遍假绿）
             }
             return LEARNINGS_JSON;
         }

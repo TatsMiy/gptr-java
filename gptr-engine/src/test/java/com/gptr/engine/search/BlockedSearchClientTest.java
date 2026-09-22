@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * P0-4 blocked 来源过滤单测：URL 前缀与域名（含子域）两种条目语义、端口剥离。
+ * blocked 来源过滤单测：URL 前缀与域名（含子域）两种条目语义、端口剥离。
  */
 class BlockedSearchClientTest {
 

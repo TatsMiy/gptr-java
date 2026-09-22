@@ -89,7 +89,7 @@ class DeepResearchIntegrationTest {
                 .filter(c -> c.getStage() == TaskStage.WRITING).findFirst().orElseThrow();
         JsonNode writingPayload = mapper.readTree(writing.getPayload());
         assertEquals("section", writingPayload.path("writingMode").asText(),
-                "WRITING 必须走逐节写作主链（P2-2），禁止静默降级单遍: " + writing.getPayload());
+                "WRITING 必须走逐节写作主链，禁止静默降级单遍: " + writing.getPayload());
         assertTrue(writingPayload.path("sections").asInt() >= 2,
                 "大纲应产出 ≥2 节: " + writing.getPayload());
 

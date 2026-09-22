@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * OBS-2.5 Fork 蓝图：{@code GET /tasks/{id}/template}。
+ * Fork 蓝图：{@code GET /tasks/{id}/template}。
  *
  * <p><b>config 白名单的唯一例外</b>：常规视图（TaskView 列表/详情）永不回传 config；
  * 仅本端点按需返回完整 config（含 query），供「复制为新任务」回填提交弹窗。

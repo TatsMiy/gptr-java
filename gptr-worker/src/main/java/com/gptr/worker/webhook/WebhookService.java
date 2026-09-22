@@ -105,7 +105,7 @@ public class WebhookService {
     }
 
     private void deliver(WebhookDelivery delivery) {
-        // C3-S10：投递前二次 SSRF 校验（schedule 与 deliver 之间存在时间窗，
+        // 投递前二次 SSRF 校验（schedule 与 deliver 之间存在时间窗，
         // DNS 状态可能变化）；拒绝则直接 FAILED（重试无意义）
         try {
             UrlSecurity.assertSafeHttpUrl(delivery.getUrl(), allowPrivateUrls);

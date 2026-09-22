@@ -5,7 +5,7 @@ import com.gptr.common.config.RetrieverKeyNames;
 import java.util.Map;
 
 /**
- * 检索器 API key 表（2026-09-19）。
+ * 检索器 API key 表。
  *
  *
  * <p>键 = 检索器名（{@code bocha} / {@code pubmed-central} / …），值 = key 明文。

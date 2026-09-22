@@ -3,7 +3,7 @@ package com.gptr.api.dto;
 import java.util.List;
 
 /**
- * OBS-2.5 证据库只读视图：{@code GET /tasks/{id}/evidence}。
+ * 证据库只读视图：{@code GET /tasks/{id}/evidence}。
  *
  * <p>读取 RESEARCH 图终态 checkpoint（graph_checkpoints.state_json）中的
  * evidenceBank，白名单抽取卡片字段。quote 为存储级**完整**原文（≤2000 字符），

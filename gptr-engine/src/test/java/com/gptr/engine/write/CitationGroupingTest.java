@@ -15,10 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
   * 证据目录 / 直引解析 / 多对多归节。
  *
- * <p>这三处是"错位型 F10"的根治点：证据目录让大纲**看见**证据，直引让归节有明确依据，
+ * <p>这三处是"错位型空证据节占位"的根治点：证据目录让大纲**看见**证据，直引让归节有明确依据，
  * 未引者入兜底节保证证据零丢失。
  */
-class Batch4CitationTest {
+class CitationGroupingTest {
 
     // ---------------------------------------------------------------
     // A. 证据目录
@@ -123,9 +123,9 @@ class Batch4CitationTest {
         List<SectionWriter.Section> sections = List.of(
                 section("S1", List.of(0, 1)),
                 section("S2", List.of(1)),      // note1 被两节共享
-                section("S3", List.of()));      // 空引节 → F10 前兆
+                section("S3", List.of()));      // 空引节 → 占位前兆
         SectionWriter.CitationStats cs = SectionWriter.groupByCitationWithStats(notes, sections);
-        assertEquals(1, cs.emptySections(), "空引节计数 = F10 前兆");
+        assertEquals(1, cs.emptySections(), "空引节计数 = 占位前兆");
         assertEquals(1, cs.sharedNotes(), "被 ≥2 节引用的证据数");
         assertEquals(1, cs.fallbackNotes(), "note2 未被引用");
         assertEquals(0, cs.droppedIdx());
@@ -214,7 +214,7 @@ class Batch4CitationTest {
                 section("S2", List.of()));
         List<List<Integer>> grouped = SectionWriter.groupByCitation(notes, sections);
         assertTrue(grouped.get(0).isEmpty() && grouped.get(1).isEmpty(),
-                "直引为空的节 → 空证据 → 上层走 F10 占位（不再文本匹配瞎猜）");
+                "直引为空的节 → 空证据 → 上层走占位（不再文本匹配瞎猜）");
         assertEquals(List.of(0, 1), grouped.get(2));
     }
 

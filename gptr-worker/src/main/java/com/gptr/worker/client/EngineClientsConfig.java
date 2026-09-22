@@ -171,7 +171,7 @@ public class EngineClientsConfig {
                 apiKey = System.getenv("DEEPSEEK_API_KEY");
             }
             if (apiKey == null || apiKey.isBlank()) {
-                // C3-S7 fail-fast：声明 openai 却缺 key → 启动失败而非静默降级 mock
+                // fail-fast：声明 openai 却缺 key → 启动失败而非静默降级 mock
                 // （否则生产任务会"成功"产出 mock 垃圾报告）
                 throw new IllegalStateException(
                         "gptr.clients.llm-provider=openai but no LLM api key — set llm.api-key "
@@ -238,8 +238,8 @@ public class EngineClientsConfig {
 
             @Override
             public java.util.List<ScrapedContent> scrape(java.util.List<String> urls, int maxCharsPerUrl) {
-                // 修复（M-2026 B 臂实测）：此前未 override 两参版本 → 掉进 ScraperClient 接口
-                // default 实现丢弃 maxChars → crawler 恒 4000 截断——J3 flat 蒸馏与 deep 选句
+                // 修复（B 臂实测）：此前未 override 两参版本 → 掉进 ScraperClient 接口
+                // default 实现丢弃 maxChars → crawler 恒 4000 截断——flat 蒸馏与 deep 选句
                 // 蒸馏从未真正拿到长文（mock 测试掩盖）。两参透传，重试/熔断语义与单参一致。
                 return ResilienceBeans.protectedSupplier(() -> client.scrape(urls, maxCharsPerUrl),
                         retry, breaker).get();
@@ -280,7 +280,7 @@ public class EngineClientsConfig {
     }
 
     /**
-     * 检索器 key 表（2026-09-19）：从 {@code app_config} 读检索器键，**缺失的检索器不入表**
+     * 检索器 key 表：从 {@code app_config} 读检索器键，**缺失的检索器不入表**
      * （⇒ crawler 侧回落环境变量）。
      *
      * <p>⚠️ secret 纪律：只记录"哪些检索器已配置"，**绝不打印 key 值**（与 {@code llm.api-key} 同规）。

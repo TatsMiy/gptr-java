@@ -18,11 +18,10 @@ import java.util.List;
  *   <li><b>{@code quote}</b> —— **支撑该 insight 的逐字原文摘录**（prompt 要求
  *       "quoted VERBATIM"）。存储上限 2000（现由 {@code ExtractionBudget#quoteStoreMax} 供给），
  *       渲染时才切 ≤120 ——
- *       修复 J6 在 parse 时 120 硬切会切断关键数字/否定词的问题。</li>
+ *       存储期不切，因为在那里硬切会切断关键数字/否定词。</li>
  * </ul>
  * 简记：<b>insight 是"我们要说的话"，quote 是"原文怎么说的"</b>；二者 +
  * 已授权 {@code sourceUrl} 构成一条 note。
- * <p>（本段此前写作"insight（LLM 原句）"，与 quote 语义混淆 —— 2026-09-15 修正。）
  *
  * <p>工程约束：PostgresCheckpointSaver 把 state Map 整体 Jackson 化，值必须是
  * JSON 友好类型 → evidenceBank 以 {@code List<String>}（每条 = 本类 JSON）承载。
@@ -81,7 +80,7 @@ public record EvidenceNote(int idx, int depth, int round, int queryIdx,
     /**
      * 渲染为兼容旧格式的 learnings 文本：{@code insight [quote: ≤120] [source: url]}。
      * quote 渲染截断 120（保真存储在 note.quote）；sourceUrl 为空时不写 [source:]
-     * 且连带省略 [quote:]（孤儿 quote 无 URL 锚不可审计，与 J6 剥除红线一致）。
+     * 且连带省略 [quote:]（孤儿 quote 无 URL 锚不可审计，须与 sourceUrl 一并剥除）。
      * 截断统一走 {@link DeepResearchPrompts#truncateQuote}（120 + "…"，与 parseLearnings
      * 渲染逐字一致；不用 ContextManager.truncateEach——其 "\n...[truncated]" 会破坏单行格式）。
      */

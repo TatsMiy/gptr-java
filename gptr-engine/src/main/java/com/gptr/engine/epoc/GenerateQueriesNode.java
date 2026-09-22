@@ -3,13 +3,11 @@ package com.gptr.engine.epoc;
 
 import com.gptr.integration.client.LlmClient;
 import java.util.ArrayList;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.DoubleConsumer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,20 +26,12 @@ final class GenerateQueriesNode {
     }
 
     /** 真实生成首层搜索查询（原版 generate-search-queries prompt + chatJson）。
-     *  批 2（覆盖自检）：LLM 返回 {queries[{query,researchGoal,targetedDimension}],
+     *  覆盖自检：LLM 返回 {queries[{query,researchGoal,targetedDimension}],
      *  uncoveredDimensions[]}；uncoveredDimensions 非空 → 补一轮定向补查（≤缺失数条），
      *  合并去重。旧裸数组 schema 兼容（parseQuerySpecs 容错 → 回退 parseQueryList 语义）。
-          *  coverMode 三档——dimensions（新，维度清单+机械下界）/ legacy（批 2
-     *  自检补查）/ off（批 1 行为）。 */
-    static AsyncNodeAction<DeepResearchState> realGenerateQueries(
-            LlmClient llm, DoubleConsumer costCallback, String coverMode) {
-        return state -> CompletableFuture.supplyAsync(
-                () -> runGenerateQueries(state, llm, costCallback, coverMode));
-    }
-
-    /** {@link #realGenerateQueries} 的实现体（原 lambda 体逐字搬入，缩进 −2 层）。 */
-    private static Map<String, Object> runGenerateQueries(DeepResearchState state, LlmClient llm,
-                                                          DoubleConsumer costCallback, String coverMode) {
+          *  coverMode 三档——dimensions（新，维度清单+机械下界）/ legacy（自检补查）/ off（初始行为）。 */
+    static Map<String, Object> runGenerateQueries(DeepResearchState state, LlmClient llm,
+                                                  DoubleConsumer costCallback, String coverMode) {
         String mode = coverMode == null ? "legacy" : coverMode.toLowerCase(Locale.ROOT);
         if ("dimensions".equals(mode)) {
             return generateByDimensions(llm, costCallback, state);
@@ -50,7 +40,7 @@ final class GenerateQueriesNode {
     }
 
     /**
-     * 批 4-pre：维度清单路径（覆盖机制新形态）。
+     * 维度清单路径（覆盖机制新形态）。
      *
      * <p>LLM 一次给出 {@code dimensions[{dimension, queries[]}]}；Java 只做**机械校验**：
      * 每个维度是否都有查询、查询总数是否 ≥ breadth——缺则触发**一次**定向补齐。
@@ -93,14 +83,12 @@ final class GenerateQueriesNode {
                 costCallback.accept(llm.lastCallCostUsd());
                 // 补齐上限 = max(缺失维度数, breadth 缺口)——只按缺失维度数会漏掉"维度都全但总数不够"
                 int fillLimit = Math.max(targets.size(), state.breadth() - queries.size());
-                int added = 0;
-                for (DeepResearchPrompts.QuerySpec s
-                        : DeepResearchPrompts.parseQuerySpecs(raw2, fillLimit)) {
-                    if (!queries.contains(s.query())) {
-                        queries.add(s.query());
-                        added++;
-                    }
-                }
+                List<String> fresh = DeepResearchPrompts.parseQuerySpecs(raw2, fillLimit).stream()
+                        .map(DeepResearchPrompts.QuerySpec::query)
+                        .filter(q -> !queries.contains(q))
+                        .toList();
+                queries.addAll(fresh);
+                int added = fresh.size();
                 LOG.info("[batch4pre] dims-fill added {} queries", added);
             } catch (Exception e) {
                 LOG.warn("[batch4pre] dims-fill failed (keep base queries): {}", e.toString());
@@ -111,7 +99,7 @@ final class GenerateQueriesNode {
         }
         Map<String, Object> updates = new HashMap<>();
         updates.put(DeepResearchState.K_QUERIES, queries);
-        // 维度清单（JSON 字符串列表，checkpoint 兼容）——批 4 大纲期按维度组织证据目录
+        // 维度清单（JSON 字符串列表，checkpoint 兼容）——大纲期按维度组织证据目录
         List<String> dims = new ArrayList<>();
         for (DeepResearchPrompts.Dimension d : plan.dimensions()) {
             dims.add(DeepResearchPrompts.dimensionToJson(d.name(), d.queries()));
@@ -120,7 +108,7 @@ final class GenerateQueriesNode {
         return updates;
     }
 
-    /** 批 2 路径（legacy）/ 批 1 路径（silent=off：不生成维度、不补查）。 */
+    /** legacy 路径与 off 路径（silent=off：不生成维度、不补查）。 */
     private static Map<String, Object> generateLegacy(LlmClient llm, DoubleConsumer costCallback,
                                                       DeepResearchState state, boolean silent) {
         String system = DeepResearchPrompts.get("generate-search-queries.system");
@@ -156,13 +144,12 @@ final class GenerateQueriesNode {
                 costCallback.accept(llm.lastCallCostUsd());
                 List<DeepResearchPrompts.QuerySpec> fill =
                         DeepResearchPrompts.parseQuerySpecs(raw2, uncovered.size());
-                int added = 0;
-                for (DeepResearchPrompts.QuerySpec s : fill) {
-                    if (!queries.contains(s.query())) {
-                        queries.add(s.query());
-                        added++;
-                    }
-                }
+                List<String> freshFill = fill.stream()
+                        .map(DeepResearchPrompts.QuerySpec::query)
+                        .filter(q -> !queries.contains(q))
+                        .toList();
+                queries.addAll(freshFill);
+                int added = freshFill.size();
                 LOG.info("[batch2] cover-fill added {} quer{}", added, added == 1 ? "y" : "ies");
             } catch (Exception e) {
                 LOG.warn("[batch2] cover-fill failed (keep base queries): {}", e.toString());

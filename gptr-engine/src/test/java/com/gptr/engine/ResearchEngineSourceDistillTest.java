@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * J3 flat 来源提炼（sourceDistill）：长网页截断（爬虫 4000 + Java 3000）丢后段核心
+ * flat 来源提炼（sourceDistill）：长网页截断（爬虫 4000 + Java 3000）丢后段核心
  * 数据的修复——可配置 LLM 要点提炼覆盖全文；默认关（截断兜底）；失败回退原文。
  * 纯单测（无 DB）。
  */

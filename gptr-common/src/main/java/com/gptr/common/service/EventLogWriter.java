@@ -48,7 +48,7 @@ public class EventLogWriter {
     }
 
     /**
-     * OBS-1：追加 ACTIVITY（观测）事件——独立事务（REQUIRES_NEW）+ seq 乐观重试。
+     * 追加 ACTIVITY（观测）事件——独立事务（REQUIRES_NEW）+ seq 乐观重试。
      *
      * <p>图内并行节点可能并发写同一任务：不用应用层锁（UUID 对象锁与"锁内取号、
      * 锁外提交"都防不住竞态），改为 DB 唯一约束兜底——(task_id, seq) 冲突时该事务

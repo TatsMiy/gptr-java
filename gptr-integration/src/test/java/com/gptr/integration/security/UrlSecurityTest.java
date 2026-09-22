@@ -65,7 +65,7 @@ class UrlSecurityTest {
 
     @Test
     void ipv6UlaIsPrivate() {
-        // C3-S10：JDK isSiteLocalAddress 不含 ULA fc00::/7——必须显式拦截
+        // JDK isSiteLocalAddress 不含 ULA fc00::/7——必须显式拦截
         assertTrue(UrlSecurity.isPrivateHost("fc00::1"), "ULA fc00::/7 应判私网");
         assertTrue(UrlSecurity.isPrivateHost("fd12:3456::1"), "ULA fd00::/8 应判私网");
         assertThrows(IllegalArgumentException.class,
@@ -77,7 +77,7 @@ class UrlSecurityTest {
 
     @Test
     void unresolvableHostFailsClosed() {
-        // C3-S10 fail-closed：DNS 解析失败视为不安全（.invalid TLD 永不解析）
+        // fail-closed：DNS 解析失败视为不安全（.invalid TLD 永不解析）
         assertThrows(IllegalArgumentException.class,
                 () -> UrlSecurity.assertSafeHttpUrl("http://definitely-not-a-real-host.invalid/hook", false),
                 "解析失败的域名必须 fail-closed 拒绝");

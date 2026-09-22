@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * OBS-1：观测台统计快照（近 24h 窗口：任务量 / 状态分布 / 累计花费）。
+ * 观测台统计快照（近 24h 窗口：任务量 / 状态分布 / 累计花费）。
  *
  * <p>白名单类型（只含统计聚合，绝不携带 config 或任务明细）。
  *

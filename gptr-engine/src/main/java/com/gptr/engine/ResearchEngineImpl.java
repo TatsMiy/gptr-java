@@ -47,6 +47,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.RunnableConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 研究引擎实现：实现 {@link ResearchEngine}，按模式编排阶段。
@@ -84,8 +86,8 @@ import org.bsc.langgraph4j.RunnableConfig;
  */
 public class ResearchEngineImpl implements ResearchEngine {
 
-    private static final org.slf4j.Logger LOG =
-            org.slf4j.LoggerFactory.getLogger(ResearchEngineImpl.class);
+    private static final Logger LOG =
+            LoggerFactory.getLogger(ResearchEngineImpl.class);
 
     private static final List<TaskStage> STAGES_FLAT = List.of(
             TaskStage.PLANNING, TaskStage.SEARCHING, TaskStage.SCRAPING,
@@ -94,7 +96,7 @@ public class ResearchEngineImpl implements ResearchEngine {
             TaskStage.PLANNING, TaskStage.RESEARCH, TaskStage.WRITING);
 
     private static final Pattern SOURCE_URL = Pattern.compile("\\[source:\\s*(https?://[^\\]]+)\\]");
-    /** OBS-1 逐节活动事件 label（节标题）的截断长度。 */
+    /** 逐节活动事件 label（节标题）的截断长度。 */
     private static final int ACTIVITY_SECTION_LABEL_MAX_CHARS = 80;
 
     /** [chain] 日志用任务号的前缀长度。 */
@@ -114,34 +116,34 @@ public class ResearchEngineImpl implements ResearchEngine {
     private final SearchOptions searchOptions;
     private final boolean fetchFullPage;
     private final int maxScrapeUrls;
-    private final String scrapeQuotaMode;   // 批 4-pre：flat（现状）/ linked（联动+组轮转）
-    private final int scrapePerQueryQuota;  // 批 4-pre：linked 每查询组名额
-    private final int scrapeMinQuota;       // 批 4-pre：linked 配额下界
-    private final int scrapeHardCap;        // 批 4-pre：linked 配额上界
-    private final String coverMode;         // 批 4-pre：dimensions / legacy / off
-    private final boolean assignByCitation; // 批 4：归节模式（直引优先 vs 文本匹配）
-    private final int evidenceIndexMaxChars; // 批 4：证据目录注入预算
-    private final boolean followUpDriven; // E3：learnings 驱动下一层
-    private final double breadthDecay;    // E3：每层查询数衰减
-    private final int clarifyQuestions;   // I-8：澄清前奏问题数（0=关，默认 3）
-    private final boolean perQueryExtract; // I-7：per-query 独立提炼（默认 true）
-    private final boolean curateSources;   // I-6：来源质量闸（默认 true，见 EngineConfig）
+    private final String scrapeQuotaMode;   // flat（现状）/ linked（联动+组轮转）
+    private final int scrapePerQueryQuota;  // linked 每查询组名额
+    private final int scrapeMinQuota;       // linked 配额下界
+    private final int scrapeHardCap;        // linked 配额上界
+    private final String coverMode;         // dimensions / legacy / off
+    private final boolean assignByCitation; // 归节模式（直引优先 vs 文本匹配）
+    private final int evidenceIndexMaxChars; // 证据目录注入预算
+    private final boolean followUpDriven; // learnings 驱动下一层
+    private final double breadthDecay;    // 每层查询数衰减
+    private final int clarifyQuestions;   // 澄清前奏问题数（0=关，默认 3）
+    private final boolean perQueryExtract; // per-query 独立提炼（默认 true）
+    private final boolean curateSources;   // 来源质量闸（默认 true，见 EngineConfig）
     private final boolean sourceRank;      // 关口 A：取名前按 URL 分档（默认 false）
-    private final int curatorMaxSources;   // I-6：curate 保留上限（默认 10）
-    private final boolean sourceDistill;   // J3：来源提炼（默认关=截断兜底）
-    private final int distillMaxChars;     // J3：进提炼的正文上限
-    private final int distillConcurrency;  // 任务级并发配置；⚠️ 自 2026-09-14 起**不再影响闸容量**（见构造器注释）
+    private final int curatorMaxSources;   // curate 保留上限（默认 10）
+    private final boolean sourceDistill;   // 来源提炼（默认关=截断兜底）
+    private final int distillMaxChars;     // 进提炼的正文上限
+    private final int distillConcurrency;  // 任务级并发配置；⚠️ **不影响闸容量**（见构造器注释）
     private final DistillGate distillGate;  // 蒸馏并发闸（装配层注入的进程内共享件）
-    private final boolean extractOnDistilled; // M-2026：蒸馏句块是否仍走 extract（X=true/Y=false）
-    private final int contextMaxChars;      // M-2026：回退/单遍写作上下文预算
-    private final String language;         // J3：研报语言（报告 writer 由 factory 使用）
-    private final boolean planReflect;     // J6：层间计划反思（默认开）
+    private final boolean extractOnDistilled; // 蒸馏句块是否仍走 extract（X=true/Y=false）
+    private final int contextMaxChars;      // 回退/单遍写作上下文预算
+    private final String language;         // 研报语言（报告 writer 由 factory 使用）
+    private final boolean planReflect;     // 层间计划反思（默认开）
     private final SubQueryPlanner planner;
     private final Searcher searcher;
     private final LlmClient llmClient;
-    private final boolean sectionWriting;  // P2-2：outline 逐节写作（默认关，A/B 后翻转默认值）
-    private final SectionWriter sectionWriter; // P2-2（null=关闭）
-    private final boolean sectionRetryOnUnauthorized; // P2-2：节级违规重写
+    private final boolean sectionWriting;  // outline 逐节写作（默认开，见 EngineConfig）
+    private final SectionWriter sectionWriter; // null=关闭逐节写作
+    private final boolean sectionRetryOnUnauthorized; // 节级违规重写
     private final SearchClient searchClient;
         /** 提炼域预算载体（原此处 4 个 private static final 常量已并入）。 */
     private final ExtractionBudget extraction;
@@ -151,7 +153,7 @@ public class ResearchEngineImpl implements ResearchEngine {
      *  {@code static}：本类既有静态工具（{@code truncateForPreview}）也要读它。 */
     private static final WritingBudget WRITING = Budgets.defaults().writing();
 
-    /** OBS-1：研究进程活动观察者（可空=无观测；失败由调用侧吞掉，绝不影响研究）。 */
+    /** 研究进程活动观察者（可空=无观测；失败由调用侧吞掉，绝不影响研究）。 */
     private ActivitySink activitySink;
 
     @Override
@@ -182,15 +184,15 @@ public class ResearchEngineImpl implements ResearchEngine {
     private List<ScrapedContent> scrapedPages = List.of(); // flat SCRAPING 产出
     private String summarizedContext = "";                  // flat SUMMARIZING 产出
     private List<String> deepLearnings = List.of();         // RESEARCH 阶段图产出
-    private List<String> deepSourceUrls = List.of();         // RESEARCH 真实检索 URL（C3-D 授权来源）
-    private List<String> deepEvidenceBank = List.of();       // P2-1：RESEARCH 证据库（EvidenceNote JSON 串）
-    // 链路漏斗（2026-09-13）：抓取成功页 URL + 图内累计计数（picked/returned/validPages）。
+    private List<String> deepSourceUrls = List.of();         // RESEARCH 真实检索 URL（授权来源）
+    private List<String> deepEvidenceBank = List.of();       // RESEARCH 证据库（EvidenceNote JSON 串）
+    // 链路漏斗：抓取成功页 URL + 图内累计计数（picked/returned/validPages）。
     // 与 visitedUrls（=尝试抓取，含失败）区分——"未读来源"的差集必须以真正读到的页为基准。
     private List<String> deepFetchedUrls = List.of();
     private int deepChainPicked;
     private int deepChainReturned;
     private int deepChainValidPages;
-    private String deepResearchState = "";                   // P2-2：中央研究状态（outline 输入）
+    private String deepResearchState = "";                   // 中央研究状态（outline 输入）
     private String report = "";
     private double researchCost;                            // RESEARCH 阶段图内成本累加
 
@@ -227,7 +229,7 @@ public class ResearchEngineImpl implements ResearchEngine {
         this.checkpointSaver = deps.checkpointSaver();
 
         var cfg = new EngineConfig(task.getConfig(), allowMockConfig);
-        // P0-4：任务 config 带 blockedUrls → 检索结果层屏蔽（flat 与 deep 图共用同一 client）
+        // 任务 config 带 blockedUrls → 检索结果层屏蔽（flat 与 deep 图共用同一 client）
         this.searchClient = cfg.blockedUrls.isEmpty()
                 ? deps.searchClient()
                 : new BlockedSearchClient(deps.searchClient(), cfg.blockedUrls);
@@ -269,7 +271,7 @@ public class ResearchEngineImpl implements ResearchEngine {
         this.sectionWriter = new SectionWriter(deps.llmClient(),
                 cfg.sectionContextChars, cfg.sectionRetryOnUnauthorized, cfg.maxSections,
                 cfg.priorSectionsMaxChars);
-        // 批 4：直引归节开关 + 证据目录预算
+        // 直引归节开关 + 证据目录预算
         this.assignByCitation = cfg.assignByCitation;
         this.evidenceIndexMaxChars = cfg.evidenceIndexMaxChars;
                 // 预算载体：代码内常量（原 private static final，提炼域）
@@ -311,7 +313,7 @@ public class ResearchEngineImpl implements ResearchEngine {
     @Override
     public String finalReport() {
         return report.isEmpty()
-                ? "# 占位报告\n\n（E3 实现写作阶段后替换）\n"
+                ? "# 占位报告\n\n（本次运行未产出报告正文）\n"
                 : report;
     }
 
@@ -340,7 +342,7 @@ public class ResearchEngineImpl implements ResearchEngine {
                 checkpointSaver.delete(task.getId().toString());
             }
             CompiledGraph<DeepResearchState> graph = DeepResearchGraph.buildReal(
-                    // OBS-1：图节点活动事件（activitySink 随依赖集传入）
+                    // 图节点活动事件（activitySink 随依赖集传入）
                     new DeepResearchGraph.GraphDeps(llmClient, searchClient, scraperClient, distillGate,
                             checkpointSaver, cost -> researchCost += cost, activitySink),
                     searchOptions,
@@ -348,7 +350,7 @@ public class ResearchEngineImpl implements ResearchEngine {
                             EffectiveBudgets.of(extraction, sourceDistill, distillMaxChars),
                             new DeepResearchGraph.PlanningOptions(clarifyQuestions, coverMode),
                             new DeepResearchGraph.ScrapeOptions(fetchFullPage,
-                                    // 批 4-pre：抓取配额（flat=现状 / linked=联动+组轮转）
+                                    // 抓取配额（flat=现状 / linked=联动+组轮转）
                                     "linked".equalsIgnoreCase(scrapeQuotaMode)
                                             ? DeepResearchGraph.ScrapeQuota.linked(
                                                     scrapePerQueryQuota, scrapeMinQuota, scrapeHardCap)
@@ -373,13 +375,13 @@ public class ResearchEngineImpl implements ResearchEngine {
             deepSourceUrls = new ArrayList<>(state.collectedUrls());
             // 证据库（per-query 结构化路径产出；空 = 旧整层路径未启用）
             deepEvidenceBank = new ArrayList<>(state.evidenceBank());
-            // 链路漏斗（2026-09-13）：抓取成功页 + 图内累计计数（写入 WRITING 后的 [chain] 汇总行）
+            // 链路漏斗：抓取成功页 + 图内累计计数（写入 WRITING 后的 [chain] 汇总行）
             deepFetchedUrls = new ArrayList<>(state.fetchedUrls());
             deepChainPicked = state.chainStat("picked");
             deepChainReturned = state.chainStat("returned");
             deepChainValidPages = state.chainStat("validPages");
-            deepResearchState = state.researchState();                     // P2-2（outline 输入）
-            // C3-S1：研究零产出（检索/解析全失败被守卫提前 END）→ 显式失败而非
+            deepResearchState = state.researchState();                     // 中央研究状态（outline 输入）
+            // 研究零产出（检索/解析全失败被守卫提前 END）→ 显式失败而非
             // 让 WRITING 基于空/编造内容"成功"
             if (deepLearnings.isEmpty()) {
                 throw new TransientApiException("research",
@@ -393,7 +395,7 @@ public class ResearchEngineImpl implements ResearchEngine {
             payload.put("followUpQuestions", state.followUpQuestions().size());
             payload.put("fetchFullPage", fetchFullPage && scraperClient != null);
             payload.put("clarifyApplied", state.clarifyApplied());
-            payload.put("evidenceNotes", state.evidenceBank().size()); // P2-1 观测点
+            payload.put("evidenceNotes", state.evidenceBank().size()); // 证据库条目数（观测点）
             // 层间计划反思是否产出中央研究状态（"(none)"=坏输出/关闭）
             String rs = state.researchState();
             payload.put("planReflectApplied", planReflect && !rs.isBlank() && !"(none)".equals(rs));
@@ -410,12 +412,12 @@ public class ResearchEngineImpl implements ResearchEngine {
         Searcher.SearchOutcome outcome =
                 searcher.searchAll(subQueries, searchOptions);
         sources = outcome.results();
-        // C3-S1：检索成功但零结果（如反爬空页）→ 显式失败（可重试），防空上下文编造
+        // 检索成功但零结果（如反爬空页）→ 显式失败（可重试），防空上下文编造
         if (sources.isEmpty()) {
             throw new TransientApiException(searchClient.name(),
                     "search succeeded but returned no results");
         }
-        // OBS-1/4：一次检索活动的元数据（链名/实际命中源/引擎 retriever 配置/计数）
+        // 一次检索活动的元数据（链名/实际命中源/引擎 retriever 配置/计数）
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("chain", searchClient.name());
         if (!outcome.hitSources().isEmpty()) {
@@ -438,7 +440,7 @@ public class ResearchEngineImpl implements ResearchEngine {
 
     /**
      * SCRAPING 阶段：对 SEARCHING 结果抓取正文（上限 maxScrapeUrls）。
-     * J3：sourceDistill=true 时请求后端放大正文上限（distillMaxChars）并对每页做 LLM
+     * sourceDistill=true 时请求后端放大正文上限（distillMaxChars）并对每页做 LLM
      * 要点提炼（长网页后半段核心数据不再因 3000 截断丢失）；提炼失败回退原文截断版
      * （不失败，质量降级）。提炼成本 ≈ 调用次数 × 单次成本（记入 stage，近似口径）。
      */
@@ -492,7 +494,7 @@ public class ResearchEngineImpl implements ResearchEngine {
     }
 
     /**
-     * J3/单页 LLM 证据提炼（以研究问题为锚；输出总结+硬核证据块，兼容旧 points 结构）。
+     * 单页 LLM 证据提炼（以研究问题为锚；输出总结+硬核证据块，兼容旧 points 结构）。
      * 坏输出/异常 → null（回退截断原文）。
      */
     private String distillPage(ScrapedContent page) {
@@ -714,7 +716,7 @@ public class ResearchEngineImpl implements ResearchEngine {
     }
 
     /**
-     * 链路漏斗（2026-09-13）：一题两行，回答"报告缺的东西断在链路的哪一环"。
+     * 链路漏斗：一题两行，回答"报告缺的东西断在链路的哪一环"。
      *
      * <p>来源行回答"<b>检索到了但没抓</b>"；事实行回答"<b>抓到了但没用上</b>"。
      * 每段数字都有独立采集点（检索=collectedUrls、取名/抓成=图内 chainStats、note=evidenceBank、
@@ -828,7 +830,7 @@ public class ResearchEngineImpl implements ResearchEngine {
                 return null;
             }
             SectionWriter.EvidenceIndexStats idxStats =
-                    // 批 4：把证据目录注入 outline（LLM 据此直引 evidenceIdx）
+                    // 把证据目录注入 outline（LLM 据此直引 evidenceIdx）
                     SectionWriter.buildEvidenceIndexWithStats(notes, evidenceIndexMaxChars);
             LOG.info("evidence index: {} items → {} included ({} omitted), {} chars",
                     idxStats.total(), idxStats.included(), idxStats.omitted(), idxStats.chars());
@@ -893,13 +895,13 @@ public class ResearchEngineImpl implements ResearchEngine {
         List<List<EvidenceNote>> bySection = new ArrayList<>();
         List<EvidenceNote> fallbackNotes = new ArrayList<>();
         if (assignByCitation) {
-            // 批 4 模式：直引优先（多对多；未引者全部入兜底节，语义干净）
+            // 直引归节模式：直引优先（多对多；未引者全部入兜底节，语义干净）
             SectionWriter.CitationStats cs = SectionWriter.groupByCitationWithStats(
                     notes, sections);
             List<List<Integer>> grouped = cs.grouped();
             if (cs.emptySections() > 0) {
-                // F10 唯一前兆：该节无直引证据 → 将走占位。全量评测据此判断是否需加保险。
-                LOG.warn("citation: {} section(s) got NO cited evidence → will use F10 "
+                // 唯一的占位前兆：该节无直引证据 → 将走占位。全量评测据此判断是否需加保险。
+                LOG.warn("citation: {} section(s) got NO cited evidence → will use "
                         + "placeholder (fallback group holds {} notes)",
                         cs.emptySections(), cs.fallbackNotes());
             }
@@ -942,7 +944,7 @@ public class ResearchEngineImpl implements ResearchEngine {
     private record SectionWriteOutcome(List<String> markdowns, int unauthorizedTotal, int retried) {
     }
 
-    /** 逐节写作（节级引用闸门 + 可选重写），并上报 OBS-1 逐节活动（原内联段逐字搬入）。 */
+    /** 逐节写作（节级引用闸门 + 可选重写），并上报逐节活动（原内联段逐字搬入）。 */
     private SectionWriteOutcome writeSections(List<SectionWriter.Section> sections,
                                               List<List<EvidenceNote>> bySection) {
         List<String> sectionMarkdowns = new ArrayList<>();
@@ -963,7 +965,7 @@ public class ResearchEngineImpl implements ResearchEngine {
             if (so.retried()) {
                 retried++;
             }
-            // OBS-1：逐节写作活动（节标题截断为 label；仅节元数据入 detail）
+            // 逐节写作活动（节标题截断为 label；仅节元数据入 detail）
             String title = sections.get(i).title();
             String label = title == null ? "" : title.trim();
             if (label.length() > ACTIVITY_SECTION_LABEL_MAX_CHARS) {
@@ -1019,18 +1021,26 @@ public class ResearchEngineImpl implements ResearchEngine {
                 ? flat : flat.substring(0, WRITING.sectionPreviewMaxChars()) + "…";
     }
 
+    /** 证据条目 JSON 里的来源 URL；缺失 / 空白 / 坏 JSON → null。 */
+    private static String sourceUrlOf(String json) {
+        try {
+            var n = EvidenceNote.fromJson(json);
+            String url = n.sourceUrl();
+            return url == null || url.isBlank() ? null : url;
+        } catch (Exception ignored) {
+            // 坏元素跳过
+            return null;
+        }
+    }
+
     /** 写作授权 URL 集 = 实际有证据的锚（见 writePayload 注释）。 */
     private List<String> writingAuthorizedUrls() {
         LinkedHashSet<String> urls = new LinkedHashSet<>();
         if (deepEvidenceBank != null) {
             for (String json : deepEvidenceBank) {
-                try {
-                    var n = EvidenceNote.fromJson(json);
-                    if (n.sourceUrl() != null && !n.sourceUrl().isBlank()) {
-                        urls.add(n.sourceUrl());
-                    }
-                } catch (Exception ignored) {
-                    // 坏元素跳过
+                String url = sourceUrlOf(json);
+                if (url != null) {
+                    urls.add(url);
                 }
             }
         }

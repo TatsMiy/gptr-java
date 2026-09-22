@@ -50,7 +50,7 @@ public class CitationVerifier {
     }
 
     /**
-     * 报告引用统计（链路漏斗用，2026-09-13）：
+     * 报告引用统计（链路漏斗用）：
      * <ul>
      *   <li>{@code total} —— <b>总引证次数</b>（同一 URL 被引 5 次即计 5 次）；</li>
      *   <li>{@code distinctRaw} —— 按原文去重的来源数；</li>
@@ -101,10 +101,6 @@ public class CitationVerifier {
         return false;
     }
 
-    // 【2026-09-14 删除】此处原有一个 `public String authorizedOriginalFor(String reportUrl)`
-    // （canonical → 授权原文）与配套可变字段 `canonicalToOriginal`：全仓 0 调用方
-    // （main/test/benchmark 均无），故一并移除 —— 零调用 API 只增加读者负担。
-    // 将来若做引用溯源 UI 需要它，请连同消费方与测试一起加回。
 
     /**
      * 提取 URL（手写扫描器）：URL 内 {@code (deep_learning)} 的 {@code )} 属于 URL
@@ -114,6 +110,38 @@ public class CitationVerifier {
      */
     private static List<String> extractUrls(String text) {
         return extractUrls(text, true);
+    }
+
+    /** 从 start 扫到 URL 结束位置（括号配平；遇终止符停）。 */
+    private static int scanUrlEnd(String text, int start) {
+        int j = start;
+        int open = 0;
+        while (j < text.length()) {
+            char c = text.charAt(j);
+            if (c == '(') {
+                open++;
+            } else if (c == ')') {
+                if (open == 0) {
+                    break; // markdown/括号闭合
+                }
+                open--;
+            } else if (isUrlTerminator(c)) {
+                break;
+            }
+            j++;
+        }
+        return j;
+    }
+
+    /**
+     * URL 终止字符。
+     *
+     * <p>注：{@code ';'} 是合法 path/query 字符（RFC 3986 pchar），**不是**终止符。
+     * 中文句读标点也终止（{@code CJK_PUNCT}）。
+     */
+    private static boolean isUrlTerminator(char c) {
+        return c == ']' || c == '>' || c == '"' || c == '\'' || c == ','
+                || c == '`' || Character.isWhitespace(c) || CJK_PUNCT.indexOf(c) >= 0;
     }
 
     /**
@@ -136,26 +164,7 @@ public class CitationVerifier {
                 i++;
                 continue;
             }
-            int j = start;
-            int open = 0;
-            while (j < n) {
-                char c = text.charAt(j);
-                if (c == '(') {
-                    open++;
-                } else if (c == ')') {
-                    if (open == 0) {
-                        break; // markdown/括号闭合
-                    }
-                    open--;
-                } else if (c == ']' || c == '>' || c == '"' || c == '\'' || c == ','
-                        || c == '`' || Character.isWhitespace(c)) {
-                    break;
-                    // 注：';' 是合法 path/query 字符（RFC 3986 pchar），不再作终止符
-                } else if (CJK_PUNCT.indexOf(c) >= 0) {
-                    break; // 中文句读标点终止
-                }
-                j++;
-            }
+            int j = scanUrlEnd(text, start);
             String url = stripTrailing(text.substring(start, j));
             url = balanceParens(url);
             if (!url.isEmpty() && (!dedupe || !urls.contains(url))) {

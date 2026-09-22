@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * M-2026 素材增强新键：默认值纪律 + JSON 注入（默认=现状；评测批次注入覆盖）。
+ * 素材增强新键：默认值纪律 + JSON 注入（默认=现状；评测批次注入覆盖）。
  */
 class MaterialEnhancementConfigTest {
 
@@ -24,7 +24,7 @@ class MaterialEnhancementConfigTest {
         assertEquals(12000, cfg.contextMaxChars, "回退/单遍上下文预算默认 12000（原硬编码值）");
         assertEquals(6000, cfg.sectionContextChars);
         assertFalse(cfg.sourceDistill, "sourceDistill 默认仍关");
-        assertEquals(6, cfg.maxSections, "批 2：大纲节数上限默认 6（现状）");
+        assertEquals(6, cfg.maxSections, "大纲节数上限默认 6（现状）");
     }
 
     @Test
@@ -35,7 +35,7 @@ class MaterialEnhancementConfigTest {
         assertTrue(cfg.extractOnDistilled, "X 臂显式开启（提炼路径，回退/对照配置）");
         assertEquals(25000, cfg.contextMaxChars);
         assertTrue(cfg.sourceDistill);
-        assertEquals(8, cfg.maxSections, "批 2 评测注入 8");
+        assertEquals(8, cfg.maxSections, "评测注入 8");
     }
 
     @Test

@@ -3,7 +3,6 @@ package com.gptr.engine.epoc;
 import com.gptr.engine.budget.CurateBudget;
 import com.gptr.engine.context.ContextManager;
 import com.gptr.integration.client.LlmClient;
-import org.bsc.langgraph4j.action.AsyncNodeAction;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,17 +23,10 @@ final class CurateNode {
      *  每子查询独立并行 curate：LLM 输出**有序**精选（kept 序号 1-based，"最佳→次佳"）；
      *  该顺序被保留并写回条目组，故下游 extract 让高质量条目优先占预算。
      *  坏输出/空结果/异常 → 回退原文（排序非删除，防误杀）；编号条目每条截断降本。 */
-    static AsyncNodeAction<DeepResearchState> realCurateSources(
-            LlmClient llm, int maxSources, DoubleConsumer costCallback, CurateBudget curate) {
-        return state -> CompletableFuture.supplyAsync(
-                () -> runCurateSources(state, llm, maxSources, costCallback, curate));
-    }
-
-    /** {@link #realCurateSources} 的实现体（原 lambda 体逐字搬入，缩进 −2 层）。 */
     //有CurateBudget，maxSources两个相关预算
-    private static Map<String, Object> runCurateSources(DeepResearchState state, LlmClient llm,
-                                                        int maxSources, DoubleConsumer costCallback,
-                                                        CurateBudget curate) {
+    static Map<String, Object> runCurateSources(DeepResearchState state, LlmClient llm,
+                                                int maxSources, DoubleConsumer costCallback,
+                                                CurateBudget curate) {
         List<String> queries = state.queries();
         List<List<String>> items = state.queryItems();
         if (queries.isEmpty() || items.isEmpty()) {

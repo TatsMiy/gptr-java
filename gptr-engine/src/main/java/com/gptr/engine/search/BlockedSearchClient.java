@@ -9,7 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * P0-4 禁止来源过滤（对标 Bench II blocked list 的工具层屏蔽，比 prompt 阻断更彻底）：
+ * 禁止来源过滤（对标 Bench II blocked list 的工具层屏蔽，比 prompt 阻断更彻底）：
  * 在检索结果层丢弃命中 blocked 的 URL（条目语义：含 "://" = URL 前缀匹配；
  * 否则 = 域名匹配 host 或其子域）。flat 与 deep（图内 search/scrape 目标）都经此过滤
  * ——被屏蔽源不会进入检索结果/抓取目标，报告自然无法引用它（引用闸门兜底）。

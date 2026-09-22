@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * 研究引擎接口（底座持有控制循环，引擎实现阶段迭代）。
  *
- * <p>M2 由 {@code MockResearchEngine} 实现（模拟五阶段）；真引擎（GPT-Researcher
- * Java 化流水线）后置实现，实现本接口即可被底座驱动。
+ * <p>实现方：gptr-engine 的 {@code ResearchEngineImpl}（GPT-Researcher 的 Java 化流水线）；
+ * 测试可换 mock 实现——实现本接口即可被底座驱动。
  */
 public interface ResearchEngine {
 

@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import java.nio.file.Path;
 
 /**
- * OBS-2：api 侧报告存储装配（读最终研报正文用）。
+ * api 侧报告存储装配（读最终研报正文用）。
  *
  * <p>与 worker 侧同键同默认（{@code gptr.storage.*}），保证 api/worker 读到同一产物；
  * worker 写、api 读，ref 为绝对路径/桶定位，跨进程一致。

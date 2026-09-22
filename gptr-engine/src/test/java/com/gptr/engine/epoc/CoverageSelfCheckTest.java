@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 批 2：覆盖自检解析 / 缺口驱动数量 / maxSections 参数化（纯函数级）。
+ * 覆盖自检解析 / 缺口驱动数量 / maxSections 参数化（纯函数级）。
  */
-class Batch2CoverageTest {
+class CoverageSelfCheckTest {
 
     private static final ObjectMapper M = new ObjectMapper();
 

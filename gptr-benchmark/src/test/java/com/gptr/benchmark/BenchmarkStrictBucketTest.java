@@ -52,7 +52,7 @@ class BenchmarkStrictBucketTest {
         BenchmarkMain.aggregateStrict(row("SUCCEEDED", true, "judge-unparsable", false), buckets);
         org.junit.jupiter.api.Assertions.assertNull(buckets.get("all-strict"),
                 "SUCCEEDED 但 judge 无布尔判定：剔除（无判定能力不算错也不算对，同条件桶）");
-        // 但任务失败（FAILED）即使无判定也必须入桶计错——这是 F1 的核心语义
+        // 但任务失败（FAILED）即使无判定也必须入桶计错——这是 all-strict 全样本口径的核心语义
         Map<String, double[]> buckets2 = new LinkedHashMap<>();
         BenchmarkMain.aggregateStrict(row("FAILED", true, null, false), buckets2);
         assertArrayEquals(new double[]{1, 0}, buckets2.get("all-strict"),

@@ -23,7 +23,7 @@ import java.util.List;
 
 /**
  * Python 爬虫服务检索客户端：调用 gptr-crawler 的 {@code POST /search}，
- * 复用 gpt-researcher 的 21 个检索器。P0.5 起不再硬编码 duckduckgo——构造时给默认
+ * 复用 gpt-researcher 的 21 个检索器。检索器不硬编码——构造时给默认
  * retriever/maxResults，单次搜索可用 {@link SearchOptions} 覆盖（引擎任务级 config 传入）。
  *
  * <p>错误分类：429 → Quota；5xx → Transient；4xx → Permanent。
@@ -39,7 +39,7 @@ public class PythonCrawlerSearchClient implements SearchClient {
     private final String baseUrl;
     private final String defaultRetriever;
     private final int defaultMaxResults;
-    /** 检索器 key 表（2026-09-19）；{@code EMPTY} = 全部回落 env，等价于改动前行为。 */
+    /** 检索器 key 表；{@code EMPTY} = 全部回落 env，等价于改动前行为。 */
     private final RetrieverKeys retrieverKeys;
     private final HttpClient http;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -53,7 +53,7 @@ public class PythonCrawlerSearchClient implements SearchClient {
         this(baseUrl, defaultRetriever, defaultMaxResults, RetrieverKeys.EMPTY);
     }
 
-        /** 生产构造（2026-09-19）：额外接受检索器 key 表，按当前检索器注入 header。 */
+        /** 生产构造：额外接受检索器 key 表，按当前检索器注入 header。 */
     public PythonCrawlerSearchClient(String baseUrl, String defaultRetriever, int defaultMaxResults,
                                      RetrieverKeys retrieverKeys) {
         this.baseUrl = baseUrl;

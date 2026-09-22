@@ -144,17 +144,17 @@ worker 日志里的链路漏斗：
 
 ## 6. 可读性判据门禁
 
-`mvn test` 会**自动**执行门禁（`ReadabilityGateTest` 调 `scripts/check-readability.ps1`）：
-**硬判据违反即 BUILD FAILURE**。单独运行：
+`mvn test` 会**自动**执行门禁（`ReadabilityGateTest` 直接调 `ReadabilityGate`——纯 Java 实现，
+基于 JavaParser 的 AST，**不依赖任何外部脚本**）：**硬判据违反即 BUILD FAILURE**。单独运行：
 
 ```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-readability.ps1   # Windows
-pwsh       -NoProfile -File scripts/check-readability.ps1                            # PowerShell 7
+mvn -o -pl gptr-engine test -Dtest=ReadabilityGateTest
 ```
 
-12 项判据 = **8 项硬判据**（单行长度 / 块 lambda / 嵌套 lambda / 内联全限定名 / catch 丢异常 /
-嵌套三元 / 未使用 import / 嵌套层数）+ **4 项棘轮**（方法行数 / 参数个数 / record 分量 /
-仅凭注释的 catch）。棘轮是"只许下调"的存量基线，超标打 `[WARN]` 且**不中断构建**。
+13 项判据 = **8 项硬判据**（单行长度 / 块 lambda / 嵌套 lambda / 内联全限定名 / catch 丢异常 /
+嵌套三元 / 未使用 import / 私有引用）+ **5 项棘轮**（方法行数 / 参数个数 / record 分量 /
+仅凭注释的 catch / 控制语句嵌套）。棘轮是存量基线，超标打 `[WARN]` 且**不中断构建**。
+完整报告落盘 `gptr-engine/target/readability-gate.txt`。
 
 ⚠️ 无 PowerShell 的环境会被 `assumeTrue` **跳过而非失败** —— 那等于该环境没有门禁。
 

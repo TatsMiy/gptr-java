@@ -10,13 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>放在本包：EngineConfig 为包私有。
  */
-class Batch4ConfigTest {
+class CitationConfigKeysTest {
 
     @Test
     void defaultsUseCitationModeAfterFlip() {
         EngineConfig def = new EngineConfig("{}");
         assertTrue(def.assignByCitation,
-                "默认 true（2026-09-17 转正：批 4 三题验收 + 默认路径复发 3 次错位型 F10）——直引归节");
+                "默认 true（2026-09-17 转正：三题验收 + 默认路径复发 3 次错位型占位）——直引归节");
         assertEquals(40000, def.evidenceIndexMaxChars,
                 "证据目录上限默认 40000（12000 时 195 条证据被截断 31%）");
     }

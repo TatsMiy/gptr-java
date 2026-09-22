@@ -36,7 +36,7 @@ class PostgresCheckpointSaverTest {
     static void setup() {
         // 连测试库：优先取 -Pintegration 经 surefire 注入的 spring.datasource.url，
         // 缺省也落到 *_test（本测试**不走 Spring context**，必须自行读系统属性；
-        // 硬编码 gptr 会被 IntegrationDbGuard 拒绝 —— 2026-09-20 实测）
+        // 硬编码 gptr 会被 IntegrationDbGuard 拒绝）
         DriverManagerDataSource ds = new DriverManagerDataSource(
                 System.getProperty("spring.datasource.url",
                         "jdbc:postgresql://localhost:5432/gptr_test"), "gptr", "gptr");

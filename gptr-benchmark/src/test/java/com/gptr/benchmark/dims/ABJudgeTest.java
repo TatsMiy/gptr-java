@@ -128,7 +128,7 @@ class ABJudgeTest {
         assertEquals(6, ABJudge.WRITING_DIMENSIONS.size());
         assertTrue(ABJudge.WRITING_DIMENSIONS.contains("overall"));
         assertTrue(ABJudge.WRITING_DIMENSIONS.contains("honesty_restraint"));
-        // 与旧四维不冲突（I-5 保留）
+        // 旧四维清单不受写作维度扩展影响，仍为 4 个
         assertEquals(4, ABJudge.DIMENSIONS.size());
     }
 }

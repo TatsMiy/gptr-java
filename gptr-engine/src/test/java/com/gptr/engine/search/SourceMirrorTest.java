@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
- * 同源镜像判定单测。用例全部取自 q08 实测的真实检索结果（2026-09-13），
+ * 同源镜像判定单测。用例全部取自 q08 实测的真实检索结果，
  * 既覆盖"应当合并"，也覆盖"绝不能误合并"的方向。
  *
  * <p>断言统一用 {@link SourceMirror#mirrorKey} 表达"是否同源"——生产侧只暴露去重键，

@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  * <p>放在本包：EngineConfig 为包私有。
  */
-class Batch4PreConfigTest {
+class CoverageConfigKeysTest {
 
     @Test
     void defaultsPreserveCurrentBehaviour() {

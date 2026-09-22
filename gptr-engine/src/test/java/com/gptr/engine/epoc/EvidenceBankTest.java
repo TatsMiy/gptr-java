@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * - perQueryExtract=false（旧整层路径）不产 note（bank 空）；
  * - ContextManager：同源多条保留（修复 #1）、buildEvidenceContext 组内≥1+来源多样（修复 #2）。
  */
-class DeepResearchGraphP2Test {
+class EvidenceBankTest {
 
     /** 超过渲染截断线（120）的引文：头部铺垫 + 尾部唯一标记 TAIL-9876543210
      *  （渲染截 120 必切掉尾部标记；完整保真在 note 内）。 */

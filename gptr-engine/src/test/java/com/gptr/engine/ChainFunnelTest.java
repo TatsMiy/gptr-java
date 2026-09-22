@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 链路漏斗的两处纯函数单测（2026-09-13）：
+ * 链路漏斗的两处纯函数单测：
  * 引用统计（<b>次数 vs 源数</b>）与"<b>未读来源</b>"集合差集。
  *
   * <p>这两个数字分别用来区分

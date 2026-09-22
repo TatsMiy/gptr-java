@@ -3,7 +3,7 @@ package com.gptr.common.config;
 import java.util.List;
 
 /**
- * 检索器 key 的**命名单一来源**（2026-09-19）。
+ * 检索器 key 的**命名单一来源**。
  *
  *
  * <p>放在 {@code common} 是因为**三方都要用同一份清单**，而依赖方向是

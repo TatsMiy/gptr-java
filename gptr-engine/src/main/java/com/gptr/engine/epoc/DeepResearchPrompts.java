@@ -48,69 +48,84 @@ public final class DeepResearchPrompts {
     /** 解析查询列表 JSON（容错：裸数组 / markdown 包裹 / 退化）。 */
     static List<String> parseQueryList(String raw, int maxQueries) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode arr = MAPPER.readTree(candidate);
-                if (arr.isArray()) {
-                    List<String> out = new ArrayList<>();
-                    for (JsonNode n : arr) {
-                        String q = n.path("query").asText(null);
-                        if (q != null && !q.isBlank()) {
-                            out.add(q.trim());
-                        }
-                        if (out.size() >= maxQueries) {
-                            break;
-                        }
-                    }
-                    if (!out.isEmpty()) {
-                        return out;
-                    }
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            List<String> out = queryListOf(candidate, maxQueries);
+            if (out != null) {
+                return out;
             }
         }
         return List.of("fallback-query");
     }
 
-    /** 批 2：查询规格（覆盖自检 schema：query + researchGoal + targetedDimension）。 */
+    /** 单个候选的查询列表解析；非数组 / 空 / 坏 JSON → null（试下一个候选）。 */
+    private static List<String> queryListOf(String candidate, int maxQueries) {
+        try {
+            JsonNode arr = MAPPER.readTree(candidate);
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<String> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                String q = n.path("query").asText(null);
+                if (q != null && !q.isBlank()) {
+                    out.add(q.trim());
+                }
+                if (out.size() >= maxQueries) {
+                    break;
+                }
+            }
+            return out.isEmpty() ? null : out;
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
+    }
+
+    /** 查询规格（覆盖自检 schema：query + researchGoal + targetedDimension）。 */
     record QuerySpec(String query, String researchGoal, String targetedDimension) {
     }
 
     /**
-     * 批 2：解析覆盖自检 schema（容错兼容旧格式）：
+     * 解析覆盖自检 schema（容错兼容旧格式）：
      * 新：{@code {"queries":[{"query","researchGoal","targetedDimension"}],"uncoveredDimensions":[]}}；
      * 旧：裸数组 {@code [{"query","researchGoal"}]} 或字符串数组。
      * 空/坏 → 返回空列表（调用方回退旧 parseQueryList 语义）。
      */
     static List<QuerySpec> parseQuerySpecs(String raw, int maxQueries) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                JsonNode arr = root.isArray() ? root : root.path("queries");
-                if (!arr.isArray()) {
-                    continue;
-                }
-                List<QuerySpec> out = new ArrayList<>();
-                for (JsonNode n : arr) {
-                    String q = n.isTextual() ? n.asText("") : n.path("query").asText("");
-                    if (q.isBlank()) {
-                        continue;
-                    }
-                    out.add(new QuerySpec(q.trim(),
-                            n.isTextual() ? "" : n.path("researchGoal").asText("").trim(),
-                            n.isTextual() ? "" : n.path("targetedDimension").asText("").trim()));
-                    if (out.size() >= maxQueries) {
-                        break;
-                    }
-                }
-                if (!out.isEmpty()) {
-                    return out;
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            List<QuerySpec> out = querySpecsOf(candidate, maxQueries);
+            if (out != null) {
+                return out;
             }
         }
         return List.of();
+    }
+
+    /** 单个候选的覆盖自检 schema 解析；非数组 / 空 / 坏 JSON → null（试下一个候选）。 */
+    private static List<QuerySpec> querySpecsOf(String candidate, int maxQueries) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            JsonNode arr = root.isArray() ? root : root.path("queries");
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<QuerySpec> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                String q = n.isTextual() ? n.asText("") : n.path("query").asText("");
+                if (q.isBlank()) {
+                    continue;
+                }
+                out.add(new QuerySpec(q.trim(),
+                        n.isTextual() ? "" : n.path("researchGoal").asText("").trim(),
+                        n.isTextual() ? "" : n.path("targetedDimension").asText("").trim()));
+                if (out.size() >= maxQueries) {
+                    break;
+                }
+            }
+            return out.isEmpty() ? null : out;
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
     }
 
         /** 维度规格——一个维度 + 该维度下的查询（至少 1 条才算已覆盖）。 */
@@ -125,66 +140,81 @@ public final class DeepResearchPrompts {
     }
 
     /**
-     * 批 4-pre：解析维度清单 schema（覆盖机制新形态）：
+     * 解析维度清单 schema（覆盖机制新形态）：
      * {@code {"researchGoal": "...", "dimensions": [{"dimension": "...", "queries": ["..."]}]}}。
      *
      * <p>机械性：只做结构解析（去掉空维度/空查询/超量查询），**不做语义判断**——"某维度是否有
-     * 查询"由结构本身回答，这正是替换批 2"LLM 自证缺失"的关键（判定可复现）。
+     * 查询"由结构本身回答，这正是替换"LLM 自证缺失"判定方式的关键：判定可复现。
      * 兼容：维度项可为字符串（视为只有名字、无查询 → 会被判为待补）；旧 schema（queries[] 扁平）
      * → 返回空 plan（调用方回退 legacy 路径）。
      */
     static DimensionPlan parseDimensions(String raw, int maxQueries) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                if (root.isArray()) {
-                    continue; // 旧裸数组 schema：非本形态
-                }
-                JsonNode dims = root.path("dimensions");
-                if (!dims.isArray()) {
-                    continue;
-                }
-                List<Dimension> out = new ArrayList<>();
-                List<String> flat = new ArrayList<>();
-                for (JsonNode d : dims) {
-                    String name = d.isTextual() ? d.asText("").trim() : d.path("dimension").asText("").trim();
-                    List<String> qs = new ArrayList<>();
-                    JsonNode qArr = d.path("queries");
-                    if (qArr.isArray()) {
-                        for (JsonNode q : qArr) {
-                            String qt = q.isTextual() ? q.asText("") : q.path("query").asText("");
-                            if (!qt.isBlank()) {
-                                qs.add(qt.trim());
-                            }
-                        }
-                    }
-                    if (name.isBlank() && qs.isEmpty()) {
-                        continue;
-                    }
-                    Dimension dim = new Dimension(name.isBlank() ? "(unnamed)" : name,
-                            List.copyOf(qs));
-                    out.add(dim);
-                    for (String q : qs) {
-                        if (flat.size() >= maxQueries) {
-                            break;
-                        }
-                        if (!flat.contains(q)) {
-                            flat.add(q);
-                        }
-                    }
-                }
-                if (!out.isEmpty()) {
-                    return new DimensionPlan(root.path("researchGoal").asText("").trim(),
-                            List.copyOf(out), List.copyOf(flat));
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            DimensionPlan plan = dimensionPlanOf(candidate, maxQueries);
+            if (plan != null) {
+                return plan;
             }
         }
         return new DimensionPlan("", List.of(), List.of());
     }
 
-    /** 批 4-pre：维度清单中**没有任何查询**的维度名（机械下界的缺口集合）。 */
+    /** 单个候选的维度清单解析；旧 schema / 坏 JSON / 空 plan → null（调用方回退 legacy 路径）。 */
+    private static DimensionPlan dimensionPlanOf(String candidate, int maxQueries) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            if (root.isArray()) {
+                return null; // 旧裸数组 schema：非本形态
+            }
+            JsonNode dims = root.path("dimensions");
+            if (!dims.isArray()) {
+                return null;
+            }
+            List<Dimension> out = new ArrayList<>();
+            List<String> flat = new ArrayList<>();
+            for (JsonNode d : dims) {
+                addDimension(d, out, flat, maxQueries);
+            }
+            if (out.isEmpty()) {
+                return null;
+            }
+            return new DimensionPlan(root.path("researchGoal").asText("").trim(),
+                    List.copyOf(out), List.copyOf(flat));
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
+    }
+
+    /** 解析单个维度项追加进 {@code out}，并把该维度的查询去重展平进 {@code flat}。 */
+    private static void addDimension(JsonNode d, List<Dimension> out, List<String> flat, int maxQueries) {
+        String name = d.isTextual() ? d.asText("").trim() : d.path("dimension").asText("").trim();
+        List<String> qs = new ArrayList<>();
+        JsonNode qArr = d.path("queries");
+        if (qArr.isArray()) {
+            for (JsonNode q : qArr) {
+                String qt = q.isTextual() ? q.asText("") : q.path("query").asText("");
+                if (!qt.isBlank()) {
+                    qs.add(qt.trim());
+                }
+            }
+        }
+        if (name.isBlank() && qs.isEmpty()) {
+            return;
+        }
+        Dimension dim = new Dimension(name.isBlank() ? "(unnamed)" : name,
+                List.copyOf(qs));
+        out.add(dim);
+        for (String q : qs) {
+            if (flat.size() >= maxQueries) {
+                break; // 只结束本维度的展平，外层维度循环继续
+            }
+            if (!flat.contains(q)) {
+                flat.add(q);
+            }
+        }
+    }
+
+    /** 维度清单中**没有任何查询**的维度名（机械下界的缺口集合）。 */
     static List<String> dimensionsWithoutQueries(DimensionPlan plan) {
         List<String> out = new ArrayList<>();
         for (Dimension d : plan.dimensions()) {
@@ -195,7 +225,7 @@ public final class DeepResearchPrompts {
         return out;
     }
 
-    /** 批 4-pre：维度 → JSON 单对象字符串（状态键 {@code dimensions} 的载体，checkpoint 兼容）。 */
+    /** 维度 → JSON 单对象字符串（状态键 {@code dimensions} 的载体，checkpoint 兼容）。 */
     static String dimensionToJson(String name, List<String> queries) {
         try {
             var node = MAPPER.createObjectNode();
@@ -211,84 +241,112 @@ public final class DeepResearchPrompts {
         }
     }
 
-    /** 批 2：解析覆盖自检的未覆盖维度列表（{@code uncoveredDimensions: []}；旧 schema/坏 → 空）。 */
+    /** 解析覆盖自检的未覆盖维度列表（{@code uncoveredDimensions: []}；旧 schema/坏 → 空）。 */
     static List<String> parseUncoveredDimensions(String raw) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                if (root.isArray()) {
-                    continue; // 旧 schema 无此字段
-                }
-                JsonNode arr = root.path("uncoveredDimensions");
-                if (arr.isArray()) {
-                    List<String> out = new ArrayList<>();
-                    for (JsonNode n : arr) {
-                        String s = n.asText("");
-                        if (!s.isBlank()) {
-                            out.add(s.trim());
-                        }
-                    }
-                    return out; // 空数组亦为有效信号（自检全覆盖）
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            List<String> out = uncoveredDimensionsOf(candidate);
+            if (out != null) {
+                return out;
             }
         }
         return List.of();
     }
 
-    /** 批 2：解析 plan_reflect 缺口列表（{@code {"covered": "...", "gaps": []}}；缺/坏 → 空）。 */
+    /** 单个候选的未覆盖维度解析；旧 schema / 无该字段 / 坏 JSON → null（试下一个候选）。 */
+    private static List<String> uncoveredDimensionsOf(String candidate) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            if (root.isArray()) {
+                return null; // 旧 schema 无此字段
+            }
+            JsonNode arr = root.path("uncoveredDimensions");
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<String> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                String s = n.asText("");
+                if (!s.isBlank()) {
+                    out.add(s.trim());
+                }
+            }
+            return out; // 空数组亦为有效信号（自检全覆盖）
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
+    }
+
+    /** 解析 plan_reflect 缺口列表（{@code {"covered": "...", "gaps": []}}；缺/坏 → 空）。 */
     static List<String> parseGaps(String raw) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                if (!root.isObject()) {
-                    continue;
-                }
-                JsonNode arr = root.path("gaps");
-                if (arr.isArray()) {
-                    List<String> out = new ArrayList<>();
-                    for (JsonNode n : arr) {
-                        String s = n.asText("");
-                        if (!s.isBlank()) {
-                            out.add(s.trim());
-                        }
-                    }
-                    return out;
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            List<String> out = gapsOf(candidate);
+            if (out != null) {
+                return out;
             }
         }
         return List.of();
+    }
+
+    /** 单个候选的缺口列表解析；非对象 / 无 gaps 数组 / 坏 JSON → null（试下一个候选）。 */
+    private static List<String> gapsOf(String candidate) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            if (!root.isObject()) {
+                return null;
+            }
+            JsonNode arr = root.path("gaps");
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<String> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                String s = n.asText("");
+                if (!s.isBlank()) {
+                    out.add(s.trim());
+                }
+            }
+            return out;
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
     }
 
     /** 解析 follow-up questions 列表（{"questions": [...]}，容错）。 */
     static List<String> parseQuestionList(String raw, int maxQuestions) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                JsonNode arr = root.isArray() ? root : root.path("questions");
-                if (arr.isArray()) {
-                    List<String> out = new ArrayList<>();
-                    for (JsonNode n : arr) {
-                        String q = n.asText(null);
-                        if (q != null && !q.isBlank()) {
-                            out.add(q.trim());
-                        }
-                        if (out.size() >= maxQuestions) {
-                            break;
-                        }
-                    }
-                    if (!out.isEmpty()) {
-                        return out;
-                    }
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            List<String> out = questionListOf(candidate, maxQuestions);
+            if (out != null) {
+                return out;
             }
         }
         return List.of();
+    }
+
+    /** 单个候选的问题列表解析；非数组 / 空 / 坏 JSON → null（试下一个候选）。 */
+    private static List<String> questionListOf(String candidate, int maxQuestions) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            JsonNode arr = root.isArray() ? root : root.path("questions");
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<String> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                String q = n.asText(null);
+                if (q != null && !q.isBlank()) {
+                    out.add(q.trim());
+                }
+                if (out.size() >= maxQuestions) {
+                    break;
+                }
+            }
+            return out.isEmpty() ? null : out;
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
     }
 
     /** 解析来源分档的 high 序号（{"high": [1, 3]} 或裸数组）；**转为 0-based**。
@@ -327,46 +385,64 @@ public final class DeepResearchPrompts {
      * public：flat 引擎（com.gptr.engine）与 epoc 图节点共用。 */
     public static List<Integer> parseKeptIndices(String raw) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                JsonNode arr = root.isArray() ? root : root.path("kept");
-                if (arr.isArray()) {
-                    List<Integer> out = new ArrayList<>();
-                    for (JsonNode n : arr) {
-                        if (n.isIntegralNumber()) {
-                            out.add(n.asInt());
-                        }
-                    }
-                    if (!out.isEmpty()) {
-                        return out;
-                    }
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            List<Integer> out = keptIndicesOf(candidate);
+            if (out != null) {
+                return out;
             }
         }
         return null;
     }
 
+    /** 单个候选的保留序号解析；非数组 / 空 / 坏 JSON → null（试下一个候选）。 */
+    private static List<Integer> keptIndicesOf(String candidate) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            JsonNode arr = root.isArray() ? root : root.path("kept");
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<Integer> out = new ArrayList<>();
+            for (JsonNode n : arr) {
+                if (n.isIntegralNumber()) {
+                    out.add(n.asInt());
+                }
+            }
+            return out.isEmpty() ? null : out;
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
+    }
+
     /** 解析中央研究状态（{"researchState": "..."} 等键容错）；不可解析 → null。 */
     public static String parseResearchState(String raw) {
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                if (!root.isObject()) {
-                    continue;
-                }
-                for (String key : List.of("researchState", "state", "plan", "focus")) {
-                    String v = root.path(key).asText("");
-                    if (!v.isBlank()) {
-                        return v.trim();
-                    }
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            String state = researchStateOf(candidate);
+            if (state != null) {
+                return state;
             }
         }
         return null;
+    }
+
+    /** 单个候选的研究状态解析；非对象 / 无可用键 / 坏 JSON → null（试下一个候选）。 */
+    private static String researchStateOf(String candidate) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            if (!root.isObject()) {
+                return null;
+            }
+            for (String key : List.of("researchState", "state", "plan", "focus")) {
+                String v = root.path(key).asText("");
+                if (!v.isBlank()) {
+                    return v.trim();
+                }
+            }
+            return null;
+        } catch (Exception ignored) {
+            // next candidate
+            return null;
+        }
     }
 
     /**
@@ -414,39 +490,56 @@ public final class DeepResearchPrompts {
         List<EvidenceNote.Raw> raws = new ArrayList<>();
         List<String> followUps = new ArrayList<>();
         for (String candidate : candidates(raw)) {
-            try {
-                JsonNode root = MAPPER.readTree(candidate);
-                JsonNode l = root.path("learnings");
-                if (l.isArray()) {
-                    for (JsonNode n : l) {
-                        String insight = n.path("insight").asText(null);
-                        if (insight == null || insight.isBlank()) {
-                            continue;
-                        }
-                        String quote = n.path("evidenceQuote").asText("");
-                        raws.add(new EvidenceNote.Raw(insight.trim(),
-                                quote.isBlank() ? ""
-                                        : truncateStore(quote.trim(), extraction.quoteStoreMax()),
-                                n.path("sourceUrl").asText("").trim(), false));
-                    }
-                }
-                JsonNode f = root.path("followUpQuestions");
-                if (f.isArray()) {
-                    for (JsonNode n : f) {
-                        String q = n.asText(null);
-                        if (q != null && !q.isBlank()) {
-                            followUps.add(q.trim());
-                        }
-                    }
-                }
-                if (!raws.isEmpty() || !followUps.isEmpty()) {
-                    break;
-                }
-            } catch (Exception ignored) {
-                // next candidate
+            if (collectNotes(candidate, extraction, raws, followUps)) {
+                break;
             }
         }
         return new ParsedNotes(raws, followUps);
+    }
+
+    /** 收集单个候选的 note / followUp（累积进传入列表）；已取到内容 → true（停止试下一个候选）。 */
+    private static boolean collectNotes(String candidate, ExtractionBudget extraction,
+            List<EvidenceNote.Raw> raws, List<String> followUps) {
+        try {
+            JsonNode root = MAPPER.readTree(candidate);
+            collectLearnings(root.path("learnings"), extraction, raws);
+            collectFollowUps(root.path("followUpQuestions"), followUps);
+            return !raws.isEmpty() || !followUps.isEmpty();
+        } catch (Exception ignored) {
+            // next candidate
+            return false;
+        }
+    }
+
+    /** learnings 数组 → 原始 note（insight 为空的条目剔除）；非数组则不作为。 */
+    private static void collectLearnings(JsonNode l, ExtractionBudget extraction, List<EvidenceNote.Raw> raws) {
+        if (!l.isArray()) {
+            return;
+        }
+        for (JsonNode n : l) {
+            String insight = n.path("insight").asText(null);
+            if (insight == null || insight.isBlank()) {
+                continue;
+            }
+            String quote = n.path("evidenceQuote").asText("");
+            raws.add(new EvidenceNote.Raw(insight.trim(),
+                    quote.isBlank() ? ""
+                            : truncateStore(quote.trim(), extraction.quoteStoreMax()),
+                    n.path("sourceUrl").asText("").trim(), false));
+        }
+    }
+
+    /** followUpQuestions 数组 → 文本列表；非数组则不作为。 */
+    private static void collectFollowUps(JsonNode f, List<String> followUps) {
+        if (!f.isArray()) {
+            return;
+        }
+        for (JsonNode n : f) {
+            String q = n.asText(null);
+            if (q != null && !q.isBlank()) {
+                followUps.add(q.trim());
+            }
+        }
     }
 
     /** 存储层截断（保真上限 evidenceQuoteMaxChars=2000；仅防失控长文本）。

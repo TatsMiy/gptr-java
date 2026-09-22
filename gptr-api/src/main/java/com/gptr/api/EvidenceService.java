@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * OBS-2.5：证据库只读读取器（graph_checkpoints 终态 evidenceBank）。
+ * 证据库只读读取器（graph_checkpoints 终态 evidenceBank）。
  *
  * <p>原则：轻量 telemetry 走 WS/ACTIVITY，重度快照
  * （原文 quote）按需拉取——本服务一次 SQL + 白名单字段抽取，不引入引擎依赖。

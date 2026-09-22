@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>验证：① 图 2 层递归跑通（条件边 + 深度预算）② learnings/追问在状态中累积
  * ③ 原版 prompt 搬运通道（properties 加载 + 占位符替换）④ JSON 解析容错。
  */
-class DeepResearchGraphPoCTest {
+class GraphMechanicsTest {
 
     /** mock LLM：按 prompt 返回结构化 JSON（模拟原版契约）。 */
     private static BiFunction<String, String, String> mockLlm() {

@@ -23,6 +23,7 @@ import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.CompileConfig;
 import org.bsc.langgraph4j.CompiledGraph;
+import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.StateGraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,14 +31,14 @@ import org.slf4j.LoggerFactory;
 /**
  * deep research 递归图（LangGraph4j StateGraph）。
  *
- * <p>E3 结构（learnings 驱动的递归 + 守卫 + visited 去重 + 层内并行）：
+ * <p>图结构（learnings 驱动的递归 + 守卫 + visited 去重 + 层内并行）：
  * <pre>
  * START → [research_plan（澄清前奏，可配）]
  *       → generate_queries（首层：校准后 query → breadth 个子查询）
  *       → search（虚拟线程并行；产出 per-query 条目组 queryItems）
  *       → [scrape（visited 过滤；全文追加进引用该 URL 的条目组）]
  *       → [curate_sources（来源质量闸，可配；per-query 排序精选，坏输出回退）]
- *       → extract_learnings（I-7 per-query 独立提炼，breadth 次调用；或旧整层一次）
+ *       → extract_learnings（per-query 独立提炼，breadth 次调用；或旧整层一次）
  *       → route：
  *            ├─ 本轮 learnings 为 0（守卫 G2）→ END
  *            ├─ currentDepth ≥ depth → END
@@ -179,9 +180,12 @@ public class DeepResearchGraph {
 
         /** PoC 通道专用：generate + mockSearch + extract（其余节点恒空）。 */
         static NodeSet poc(BiFunction<String, String, String> llmChatJson) {
-            return builder().generate(EpocNodes.generateQueries(llmChatJson))
-                    .search(EpocNodes.mockSearch())
-                    .extract(EpocNodes.extractLearnings(llmChatJson))
+            return builder()
+                    .generate(AsyncNodeAction.node_async(
+                            state -> EpocNodes.runGenerateQueries(state, llmChatJson)))
+                    .search(AsyncNodeAction.node_async(EpocNodes::runMockSearch))
+                    .extract(AsyncNodeAction.node_async(
+                            state -> EpocNodes.runExtractLearnings(state, llmChatJson)))
                     .build();
         }
 
@@ -227,7 +231,7 @@ public class DeepResearchGraph {
 
     /** 构建图（无 checkpoint saver，内存执行）——PoC/mock 通道。 */
     public static StateGraph<DeepResearchState> build(BiFunction<String, String, String> llmChatJson)
-            throws org.bsc.langgraph4j.GraphStateException {
+            throws GraphStateException {
         return wireFull(NodeSet.poc(llmChatJson), NODE_GENERATE);
     }
 
@@ -237,8 +241,8 @@ public class DeepResearchGraph {
         return compile(build(llmChatJson), saver);
     }
 
-    /** I 批：构建真实图（E3 learnings 驱动 + I-8 澄清 + I-7 per-query 提炼 + I-6 curate）。
-     *  OBS-1：sink 非空时各节点包 observed（node start/end 活动事件；detail 仅元数据）。
+    /** 构建真实图：learnings 驱动递归 + 澄清前奏 + per-query 提炼 + 来源质量闸。
+     *  sink 非空时各节点包 observed（node start/end 活动事件；detail 仅元数据）。
      *  <p>{@code budgets} 独立传入（不并入 {@link ResearchOptions} 的任一分量组）：它是横跨
           *  全部节点的**代码内常量载体**。 */
     public static CompiledGraph<DeepResearchState> buildReal(
@@ -247,56 +251,67 @@ public class DeepResearchGraph {
         // 澄清前奏（初搜原 query → 校准 query），clarifyQuestions=0 时跳过
         AsyncNodeAction<DeepResearchState> plan = null;
         if (opts.planning().clarifyQuestions() > 0) {
-            plan = observed(ResearchPlanNode.realResearchPlan(deps.llm(), deps.search(), searchOptions,
-                    opts.planning().clarifyQuestions(), deps.costCallback(), budgets.retrieval()),
+            plan = observed(AsyncNodeAction.node_async(state -> ResearchPlanNode.runResearchPlan(
+                    state, deps.llm(), deps.search(), searchOptions,
+                    opts.planning().clarifyQuestions(), deps.costCallback(), budgets.retrieval())),
                     NODE_PLAN, deps.sink(), null);
         }
         AsyncNodeAction<DeepResearchState> generate = observed(
-                GenerateQueriesNode.realGenerateQueries(deps.llm(), deps.costCallback(), opts.planning().coverMode()),
+                AsyncNodeAction.node_async(state -> GenerateQueriesNode.runGenerateQueries(
+                        state, deps.llm(), deps.costCallback(), opts.planning().coverMode())),
                 NODE_GENERATE, deps.sink(), null);
         AsyncNodeAction<DeepResearchState> searchNode = observed(
-                SearchNode.realSearch(deps.search(), searchOptions, budgets.retrieval()),
+                AsyncNodeAction.node_async(state -> SearchNode.runSearch(
+                        state, deps.search(), searchOptions, budgets.retrieval())),
                 NODE_SEARCH, deps.sink(),
                 Map.of("chain", deps.search().name()));
         boolean withScrape = opts.scrape().fetchFullPage() && deps.scraper() != null;
-        // J3：sourceDistill → 抓取取更长正文（distillMaxChars）；M-2026：deep 路径追加每页
+        // sourceDistill → 抓取取更长正文（distillMaxChars）；deep 路径追加每页
         // 蒸馏（选句脱水 + 程序化保真前检），llm 参与 scrape 节点（Semaphore 限流）
         Map<String, Object> scrapeDetail = deps.scraper() == null ? null : Map.of("scraper", deps.scraper().name());
         AsyncNodeAction<DeepResearchState> scrapeNode = null;
         if (withScrape) {
-            scrapeNode = observed(new ScrapeNode(deps.scraper(), deps.llm(), deps.distillGate(),
-                    deps.costCallback()).action(opts.scrape().quota(), opts.budgets(),
-                    opts.scrape().sourceDistill(), opts.scrape().sourceRank()),
+            ScrapeNode scrape = new ScrapeNode(deps.scraper(), deps.llm(), deps.distillGate(),
+                    deps.costCallback());
+            scrapeNode = observed(AsyncNodeAction.node_async(state -> scrape.runScrape(state,
+                    opts.scrape().quota(), opts.budgets(),
+                    opts.scrape().sourceDistill(), opts.scrape().sourceRank())),
                     NODE_SCRAPE, deps.sink(), scrapeDetail);
         }
-        // I-7：per-query 独立提炼（默认开，对标 py 每子查询独立研究）；false = 旧整层一次
+        // per-query 独立提炼（默认开，对标 py 每子查询独立研究）；false = 旧整层一次
                 // joinCap 与 quote/queryText 存储上限同源于提炼域预算载体
         ExtractionBudget extraction = budgets.extraction();
         AsyncNodeAction<DeepResearchState> extract = observed(opts.extract().perQueryExtract()
-                ? ExtractNode.realExtractPerQuery(deps.llm(), deps.costCallback(), extraction,
-                        opts.extract().extractOnDistilled())
-                : ExtractNode.realExtractRound(deps.llm(), deps.costCallback(), extraction),
+                ? AsyncNodeAction.node_async(state -> ExtractNode.runPerQueryExtract(
+                        state, deps.llm(), deps.costCallback(), extraction,
+                        opts.extract().extractOnDistilled()))
+                : AsyncNodeAction.node_async(state -> ExtractNode.runExtractRound(
+                        state, deps.llm(), deps.costCallback(), extraction)),
                 NODE_EXTRACT, deps.sink(), null);
         // curate 依赖 per-query 条目组结构（perQueryExtract=false 时禁用）
         boolean curateOn = opts.curate().curateSources() && opts.extract().perQueryExtract()
                 && opts.curate().curatorMaxSources() > 0;
         AsyncNodeAction<DeepResearchState> curateNode = null;
         if (curateOn) {
-            curateNode = observed(CurateNode.realCurateSources(deps.llm(),
-                    opts.curate().curatorMaxSources(), deps.costCallback(), budgets.curate()),
+            curateNode = observed(AsyncNodeAction.node_async(state -> CurateNode.runCurateSources(
+                    state, deps.llm(),
+                    opts.curate().curatorMaxSources(), deps.costCallback(), budgets.curate())),
                     NODE_CURATE, deps.sink(), null);
         }
         AsyncNodeAction<DeepResearchState> followUpNode = null;
         if (opts.followUp().followUpDriven()) {
-            followUpNode = observed(FollowUpNode.realFollowUpQueries(deps.llm(), deps.costCallback(),
-                    opts.followUp().breadthDecay(), budgets.reflect()), NODE_FOLLOWUP, deps.sink(), null);
+            followUpNode = observed(AsyncNodeAction.node_async(state -> FollowUpNode.runFollowUpQueries(
+                    state, deps.llm(), deps.costCallback(),
+                    opts.followUp().breadthDecay(), budgets.reflect())),
+                    NODE_FOLLOWUP, deps.sink(), null);
         }
         // 层间计划反思（仅 learnings 驱动路径；researchState 供下轮查询生成）
         boolean planReflectOn = opts.followUp().followUpDriven() && opts.followUp().planReflect();
         AsyncNodeAction<DeepResearchState> planReflectNode = null;
         if (planReflectOn) {
-            planReflectNode = observed(PlanReflectNode.realPlanReflect(deps.llm(),
-                    deps.costCallback(), budgets.reflect()), NODE_PLAN_REFLECT, deps.sink(), null);
+            planReflectNode = observed(AsyncNodeAction.node_async(state -> PlanReflectNode.runPlanReflect(
+                    state, deps.llm(), deps.costCallback(), budgets.reflect())),
+                    NODE_PLAN_REFLECT, deps.sink(), null);
         }
         String next = resolveNextNode(planReflectOn, opts.followUp().followUpDriven());
         return compile(wireFull(NodeSet.builder()
@@ -306,7 +321,7 @@ public class DeepResearchGraph {
     }
 
     /**
-     * OBS-1：节点活动包装——start/end（或 fail）各 emit 一条 node 事件。
+     * 节点活动包装——start/end（或 fail）各 emit 一条 node 事件。
      * sink 为空 → 原样返回（零开销）；事件失败由 sink 实现侧吞掉，不进入节点链路。
      * detail 仅含元数据（计数/耗时），遵守 payload 瘦身条款。
      */
@@ -360,7 +375,7 @@ public class DeepResearchGraph {
         if (hits instanceof Collection<?> c && !c.isEmpty()) {
             d.put("hitSources", new ArrayList<>(c));
         }
-        // M-2026：蒸馏累计统计（scrape 节点写入 distillStats 键）
+        // 蒸馏累计统计（scrape 节点写入 distillStats 键）
         Object ds = state.distillStats(); // 勿传 null 默认（AgentState NPE）
         if (ds instanceof Map<?, ?> m && !m.isEmpty()) {
             d.put("distillStats", new LinkedHashMap<>(m));
@@ -378,7 +393,7 @@ public class DeepResearchGraph {
      * plan/scrape/curate/planReflect/followUp 可空（按配置裁剪节点）。
      */
     private static StateGraph<DeepResearchState> wireFull(NodeSet nodes, String nextNode)
-            throws org.bsc.langgraph4j.GraphStateException {
+            throws GraphStateException {
         StateGraph<DeepResearchState> graph = new StateGraph<>(DeepResearchState::new);
         if (nodes.plan() != null) {
             graph.addNode(NODE_PLAN, nodes.plan());

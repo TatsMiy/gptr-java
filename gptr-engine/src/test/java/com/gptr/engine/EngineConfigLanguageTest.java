@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * J3 引擎配置：研报语言归一化 + sourceDistill/distillMaxChars 键解析与默认值。
+ * 引擎配置：研报语言归一化 + sourceDistill/distillMaxChars 键解析与默认值。
  */
 class EngineConfigLanguageTest {
 
@@ -28,7 +28,7 @@ class EngineConfigLanguageTest {
         assertEquals("中文", cfg.language, "默认中文");
         assertFalse(cfg.sourceDistill, "默认关（截断兜底）");
         assertEquals(20000, cfg.distillMaxChars);
-        assertTrue(cfg.sectionWriting, "P2-2 A/B 通过后默认 true（逐节写作）");
+        assertTrue(cfg.sectionWriting, "逐节写作默认 true（A/B 通过后翻转）");
     }
 
     @Test

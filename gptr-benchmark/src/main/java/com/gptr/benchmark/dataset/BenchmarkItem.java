@@ -13,7 +13,7 @@ import java.util.List;
  * @param superseded 过时答案白名单（wrong_stale 三分类用：报告给出该描述 → stale；
  *                   空 = 该题无 stale 判定），如珠峰高程题旧值 "8844.43米"
  * @param gold       客观题标准答案（开放题可空 → 走幻觉率维度）
- * @param blocked    禁止来源（P0-4，对标 Bench II blocked list）：URL 前缀或域名；
+ * @param blocked    禁止来源（对标 Bench II blocked list）：URL 前缀或域名；
  *                   评测经引擎检索/抓取层直接屏蔽（防"直接引用源文答题"的泄漏），
  *                   报告仍引用则记 leak 并从正确判定中剔除
  */

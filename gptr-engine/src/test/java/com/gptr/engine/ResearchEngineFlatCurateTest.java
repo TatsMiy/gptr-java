@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * flat 模式来源质量闸：SUMMARIZING 前对整批条目一次 LLM 排序精选（对标 py
- * researcher.py + SourceCurator）；坏输出回退原文；**默认关**（2026-09-20 翻关：原验收未覆盖
+ * researcher.py + SourceCurator）；坏输出回退原文；**默认关**（原验收未覆盖
  * "组内条目数 &gt; `curatorMaxSources`"区间——越过该闸时组尾已抓正文块被整批丢弃）。
  * 本类用例一律**显式**指定该键，不依赖默认值。
  * 纯单测（无 DB，checkpointSaver=null）。
@@ -109,7 +109,7 @@ class ResearchEngineFlatCurateTest {
     @Test
     void flatCurateReordersEntriesByKeptPriority() {
         CurateLlm llm = new CurateLlm();
-        // 2026-09-20 起 curateSources 默认关 ⇒ 本用例显式打开（原为依赖默认 true）
+        // curateSources 默认关 ⇒ 本用例显式打开（不再依赖默认值）
         ResearchEngine engine = engine(llm, "{\"curateSources\":true}");
 
         StageResult summarizing = runThrough(engine);

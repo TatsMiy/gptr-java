@@ -57,7 +57,7 @@ class EngineLifecycleIntegrationTest {
     @Test
     void fiveStagePipelineRunsToSuccess() throws Exception {
         ResearchTask task = taskService.create(new com.gptr.common.service.CreateTaskCommand(
-                "E1 pipeline topic", "{\"maxSubQueries\":3,\"mock\":{\"stageDelayMs\":10}}", null));
+                "pipeline topic", "{\"maxSubQueries\":3,\"mock\":{\"stageDelayMs\":10}}", null));
 
         await().atMost(Duration.ofSeconds(30))
                 .untilAsserted(() -> assertEquals(TaskStatus.SUCCEEDED,

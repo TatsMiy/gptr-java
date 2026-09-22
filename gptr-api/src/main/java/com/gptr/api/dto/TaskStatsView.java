@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
- * OBS-1：观测台统计响应（近 24h 聚合；API 层 5s 缓存）。
+ * 观测台统计响应（近 24h 聚合；API 层 5s 缓存）。
  */
 public record TaskStatsView(
         OffsetDateTime since,

@@ -101,7 +101,7 @@ public class TaskService {
     }
 
     /**
-     * 运维重试：FAILED → PENDING（C3-S4 修复）。
+     * 运维重试：FAILED → PENDING。
      *
      * <p>重试 = 全新运行语义：清错误/结果引用，重置 stepsUsed/costSpentUsd，
      * 重算 deadlineAt（否则预算/超时失败重试在首个阶段必再 BUDGET_* 失败），
@@ -220,7 +220,7 @@ public class TaskService {
     }
 
     /**
-     * OBS-1/2：任务列表（created_at DESC；status 空 = 全部；offset 翻页，limit 1..100，默认 30）。
+     * 任务列表（created_at DESC；status 空 = 全部；offset 翻页，limit 1..100，默认 30）。
      *
      * <p>评审修正：{@link org.springframework.data.domain.PageRequest#of(int, int)} 首参是
      * <b>页号</b>（0-based），SQL 偏移 = pageNumber × size——故 offset 必须先折算为页号
@@ -238,7 +238,7 @@ public class TaskService {
                 : taskRepository.findLatestByStatus(status, page);
     }
 
-    /** OBS-1：近 24h 统计快照。 */
+    /** 近 24h 统计快照。 */
     @Transactional(readOnly = true)
     public TaskStats statsSince(OffsetDateTime since) {
         java.util.Map<TaskStatus, Long> by = new java.util.LinkedHashMap<>();

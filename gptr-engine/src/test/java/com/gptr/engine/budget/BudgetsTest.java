@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
   *  <p>为什么要有这个测试：载体字段**全是 int**（把 2000 与 300
  *  写反编译器不会报错）。断言逐个写出字段名，等于同时锁住**顺序**与**取值**：
- *  任何后续批次（含批 2 把 {@code EffectiveBudgets#of} 改为读载体）若改动了出厂默认值，
+ *  任何后续改动（例如把 {@code EffectiveBudgets#of} 改为读载体）若改动了出厂默认值，
  *  本测试立刻变红。
  *
  *  <p>断言里的字面值来源 = **迁移前的原常量字面值**（不是从载体反抄），故它是一份真正的
@@ -90,7 +90,7 @@ class BudgetsTest {
     }
 
         // ---------------- 派生关系不变 ----------------
-    // 批 2 会把 EffectiveBudgets#of 的两个默认值改读 ExtractionBudget；
+    // EffectiveBudgets#of 的两个默认值取自 ExtractionBudget（非硬编码）；
     // 本测试是那次改动的护栏：算式与分支必须逐字等价。
 
     @Test

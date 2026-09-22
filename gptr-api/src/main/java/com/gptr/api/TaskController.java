@@ -41,7 +41,7 @@ import java.util.UUID;
  * GET  /api/v1/tasks/stats        近 24h 统计（tasks24h / cost24hUsd / byStatus；API 5s 缓存）
  * GET  /api/v1/tasks/{id}         查询状态
  * GET  /api/v1/tasks/{id}/template Fork 蓝图（query+config；config 白名单唯一例外）
- * GET  /api/v1/tasks/{id}/evidence 证据库（RESEARCH checkpoint 只读，OBS-2.5）
+ * GET  /api/v1/tasks/{id}/evidence 证据库（RESEARCH checkpoint 只读）
  * GET  /api/v1/tasks/{id}/report  最终研报正文（仅 SUCCEEDED，text/markdown）
  * POST /api/v1/tasks/{id}/cancel  取消
  * POST /api/v1/tasks/{id}/retry   运维重试（仅 FAILED）
@@ -76,7 +76,7 @@ public class TaskController {
                 .body(new CreateTaskResponse(task.getId(), task.getStatus()));
     }
 
-    /** OBS-1：任务列表（可带 status 过滤；offset/limit 翻页）。 */
+    /** 任务列表（可带 status 过滤；offset/limit 翻页）。 */
     @GetMapping
     public List<TaskView> list(@RequestParam(required = false) TaskStatus status,
                                @RequestParam(defaultValue = "0") int offset,
@@ -86,7 +86,7 @@ public class TaskController {
     }
 
     /**
-     * OBS-2：读取最终研报正文（仅 SUCCEEDED 且有 result_ref；read-only）。
+     * 读取最终研报正文（仅 SUCCEEDED 且有 result_ref；read-only）。
      *
      * <p>返回 {@code text/markdown}；ref 只取自 DB（tasks.result_ref），不接受客户端路径。
      */
@@ -109,7 +109,7 @@ public class TaskController {
         }
     }
 
-    /** OBS-1：近 24h 统计（5s 缓存）。 */
+    /** 近 24h 统计（5s 缓存）。 */
     @GetMapping("/stats")
     public TaskStatsView stats() {
         long now = System.currentTimeMillis();
@@ -127,13 +127,13 @@ public class TaskController {
         return TaskView.from(taskService.get(id));
     }
 
-    /** OBS-2.5 Fork：返回源任务 query + 完整 config（config 白名单唯一例外，clone 蓝图用）。 */
+    /** Fork 蓝图：返回源任务 query + 完整 config（config 白名单唯一例外，clone 蓝图用）。 */
     @GetMapping("/{id}/template")
     public TaskTemplateView template(@PathVariable UUID id) {
         return TaskTemplateView.from(taskService.get(id), mapper);
     }
 
-    /** OBS-2.5 证据库：RESEARCH checkpoint 终态 evidenceBank（只读；无证据 → 空视图）。 */
+    /** 证据库：RESEARCH checkpoint 终态 evidenceBank（只读；无证据 → 空视图）。 */
     @GetMapping("/{id}/evidence")
     public EvidenceView evidence(@PathVariable UUID id) {
         taskService.get(id); // 404 语义：任务不存在

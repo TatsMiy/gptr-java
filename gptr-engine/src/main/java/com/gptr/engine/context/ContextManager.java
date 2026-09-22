@@ -75,10 +75,10 @@ public class ContextManager {
         for (String learning : deduped) {
             String block = "- " + learning + "\n";
             if (sb.length() + block.length() > maxChars) {
-                // 【2026-09-14 修复】原为 break：单条超预算即停止累积，而**首条就超预算时
-                // sb 仍为空 → 本方法返回空串**，空上下文被静默送进写作，违反 C3-S1
+                // **不能 break**：单条超预算即停止累积，会在"首条就超预算"时让 sb 仍为空
+                // → 本方法返回空串，空上下文被静默送进写作，违反
                 // （"空组不调 LLM / 防空上下文编造"）不变量。
-                // 改为跳过放不下的单条、继续尝试后续更短者；若首条即超预算，
+                // 故跳过放不下的单条、继续尝试后续更短者；若首条即超预算，
                 // 至少收下它的截断版 —— 有候选时永不返回空串。
                 if (sb.length() == 0) {
                     sb.append(truncateEach(block, Math.max(1, maxChars)));
@@ -110,6 +110,20 @@ public class ContextManager {
             out.add(normalized);
         }
         return out;
+    }
+
+    /** 从一组里挑第一个未入选、且其 URL 未达深度上限的条目；挑到则入选并返回 true。 */
+    private boolean takeOneFromGroup(List<String> group, List<String> selected,
+                                     Map<String, Integer> urlCount) {
+        for (String json : group) {
+            // `||` 短路：已入选的条目不会白调 claimUrl
+            if (selected.contains(json) || !claimUrl(urlCount, urlOf(json))) {
+                continue; // 已入选 / 该 URL 已达深度上限（或空锚）
+            }
+            selected.add(json);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -149,14 +163,7 @@ public class ContextManager {
         do {
             added = false;
             for (List<String> group : byQuery.values()) {
-                for (String json : group) {
-                    if (selected.contains(json)) {
-                        continue;
-                    }
-                    if (!claimUrl(urlCount, urlOf(json))) {
-                        continue; // 该 URL 已达深度上限（或空锚）
-                    }
-                    selected.add(json);
+                if (takeOneFromGroup(group, selected, urlCount)) {
                     added = true;
                     break;
                 }
@@ -174,8 +181,8 @@ public class ContextManager {
             }
             String block = "- " + line + "\n";
             if (sb.length() + block.length() > maxChars) {
-                // 【2026-09-14 修复】同 buildContext：原 break 在"首条即超预算"时
-                // 返回空串并静默送进写作。改为跳过 + 首条兜底截断，有候选就不返回空串。
+                // 同 buildContext：**不能 break** —— 它在"首条即超预算"时会返回空串
+                // 并静默送进写作。故跳过 + 首条兜底截断，有候选就不返回空串。
                 if (sb.length() == 0) {
                     sb.append(truncateEach(block, Math.max(1, maxChars)));
                 }

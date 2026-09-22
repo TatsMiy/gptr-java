@@ -94,7 +94,7 @@ public class TaskExecutionJob implements Runnable {
         }
     }
 
-    private static final ObjectMapper MAPPER = new ObjectMapper(); // OBS-1：sink payload 组装（线程安全）
+    private static final ObjectMapper MAPPER = new ObjectMapper(); // sink payload 组装（线程安全）
 
     private void execute() throws Exception {
         ResearchTask task = taskRepository.findById(taskId).orElse(null);
@@ -107,7 +107,7 @@ public class TaskExecutionJob implements Runnable {
         eventLog.append(taskId, TaskEventType.DISPATCHED, null, null);
 
         ResearchEngine engine = engineFactory.create(task);
-        // OBS-1：观测活动事件接线（ACTIVITY 独立事务 + 乐观 seq）；观测失败绝不影响任务
+        // 观测活动事件接线（ACTIVITY 独立事务 + 乐观 seq）；观测失败绝不影响任务
         engine.setActivitySink((stage, kind, label, detail) -> {
             try {
                 ObjectNode obj = MAPPER.createObjectNode();
@@ -131,7 +131,7 @@ public class TaskExecutionJob implements Runnable {
             StageResult result = runStageWithLeaseGuard(stage, engine);
             // 1（脑裂收口）：收尾顺序前置续租——先确认租约仍属自己，再写
             // checkpoint/事件/成本；续租失败（reaper 已回收/被 requeue）→ 不写任何
-            // 阶段产物直接放弃（任务已 PENDING 由新 worker 从零重跑；C3-S3 清 checkpoint）
+            // 阶段产物直接放弃（任务已 PENDING 由新 worker 从零重跑；重跑前必须清旧 checkpoint）
             if (!dequeuer.renewLease(taskId, ownerToken)) {
                 log.warn("lease lost after stage {} for task {}: abort without writing "
                         + "checkpoint/events/cost", stage, taskId);
