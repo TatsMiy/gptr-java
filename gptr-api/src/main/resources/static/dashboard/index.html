@@ -154,8 +154,34 @@
         <label><span data-i18n="form.steps">步骤上限</span> <input type="number" id="fSteps" value="100" min="1"></label>
         <label><span data-i18n="form.timeLimit">时长上限(秒)</span> <input type="number" id="fTime" value="1800" min="60"></label>
         <label><span data-i18n="form.costLimit">成本上限($)</span> <input type="number" id="fCost" value="10" min="0.01" step="0.01"></label>
-        <label><span data-i18n="form.retriever">retriever（留空 = 默认链）</span>
-          <input type="text" id="fRetriever" placeholder="python,duckduckgo"></label>
+        <label><span data-i18n="form.retriever">retriever（可下拉选，留空 = 默认链）</span>
+          <!-- 候选值取自 crawler 的检索器注册表（crawler/pycrawler/retrievers/）。
+               用 datalist 而非 select：既给下拉候选，又允许填清单外的值（自定义检索器）。
+               ⚠️ 这里填的是**任务 config 的 retriever**（crawler 侧）—— 与 worker 启动参数
+                  `gptr.clients.search-chain`（duckduckgo|python）是两层命名，不要混（见 BUILD.md §5.0.1）。 -->
+          <input type="text" id="fRetriever" list="retrieverOptions" placeholder="bocha">
+          <datalist id="retrieverOptions">
+            <option value="bocha"></option>
+            <option value="duckduckgo"></option>
+            <option value="tavily"></option>
+            <option value="google"></option>
+            <option value="bing"></option>
+            <option value="brave"></option>
+            <option value="exa"></option>
+            <option value="serpapi"></option>
+            <option value="serper"></option>
+            <option value="searchapi"></option>
+            <option value="searx"></option>
+            <option value="getxapi"></option>
+            <option value="xquik"></option>
+            <option value="groundroute"></option>
+            <option value="crw"></option>
+            <option value="arxiv"></option>
+            <option value="openalex"></option>
+            <option value="semantic_scholar"></option>
+            <option value="pubmed_central"></option>
+            <option value="custom"></option>
+          </datalist></label>
       </div>
     </details>
     <div class="dlg-ops">

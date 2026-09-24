@@ -85,7 +85,7 @@ class DeepResearchEngineTest {
         SearchClient search = mockSearch();
         ResearchEngine engine = new ResearchEngineImpl(
                 task, new ResearchEngineImpl.EngineDeps(new SubQueryPlanner(llm), new Searcher(search),
-                        llm, search, new com.gptr.engine.write.ReportWriter(llm), null,
+                        llm, search, new com.gptr.engine.write.ReportWriter(llm, "中文"), null,
                         new ContextManager(), saver));
 
         // 阶段 = deep research 模式（PLANNING → RESEARCH → WRITING）
@@ -118,7 +118,7 @@ class DeepResearchEngineTest {
         SearchClient search = mockSearch();
         ResearchEngine engine = new ResearchEngineImpl(
                 task, new ResearchEngineImpl.EngineDeps(new SubQueryPlanner(llm), new Searcher(search),
-                        llm, search, new com.gptr.engine.write.ReportWriter(llm), null,
+                        llm, search, new com.gptr.engine.write.ReportWriter(llm, "中文"), null,
                         new ContextManager(), saver));
 
         for (TaskStage stage : engine.stages()) {
@@ -141,7 +141,7 @@ class DeepResearchEngineTest {
         SearchClient search = mockSearch();
         ResearchEngine engine = new ResearchEngineImpl(
                 task, new ResearchEngineImpl.EngineDeps(new SubQueryPlanner(llm), new Searcher(search),
-                        llm, search, new com.gptr.engine.write.ReportWriter(llm), null,
+                        llm, search, new com.gptr.engine.write.ReportWriter(llm, "中文"), null,
                         new ContextManager(), null));
         assertEquals(5, engine.stages().size(), "non-deep mode keeps five stages");
     }

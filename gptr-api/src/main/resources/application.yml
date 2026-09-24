@@ -14,7 +14,7 @@ spring:
 server:
   port: 8080
 
-# OBS-2：报告读取（与 worker 同键；worker 写 api 读）
+# 报告读取（与 worker 同键；worker 写 api 读）
 gptr:
   storage:
     type: local            # local | minio

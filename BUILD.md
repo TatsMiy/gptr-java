@@ -154,9 +154,8 @@ mvn -o -pl gptr-engine test -Dtest=ReadabilityGateTest
 13 项判据 = **8 项硬判据**（单行长度 / 块 lambda / 嵌套 lambda / 内联全限定名 / catch 丢异常 /
 嵌套三元 / 未使用 import / 私有引用）+ **5 项棘轮**（方法行数 / 参数个数 / record 分量 /
 仅凭注释的 catch / 控制语句嵌套）。棘轮是存量基线，超标打 `[WARN]` 且**不中断构建**。
-完整报告落盘 `gptr-engine/target/readability-gate.txt`。
-
-⚠️ 无 PowerShell 的环境会被 `assumeTrue` **跳过而非失败** —— 那等于该环境没有门禁。
+完整报告落盘 `gptr-engine/target/readability-gate.txt`；
+硬判据「私有引用」的逐条明细另落盘 `gptr-engine/target/gate-private-refs.txt`。
 
 ## 7. 常见问题
 

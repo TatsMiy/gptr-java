@@ -171,7 +171,7 @@ td.q:hover { color: var(--acc); }
 .tl-row.ev-section .tl-icon { color: var(--purple); }
 .tl-cap { color: var(--dim); text-align: center; padding: 8px; font-size: 12px; }
 
-/* 证据库（OBS-2.5：重快照按需拉取） */
+/* 证据库（重快照按需拉取） */
 .ev-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
 .ev-toolbar .hint { color: var(--dim); font-size: 12px; }
 .ev-list { display: flex; flex-direction: column; gap: 10px; }
@@ -210,7 +210,7 @@ td.q:hover { color: var(--acc); }
   font: 13px/1.7 "Consolas", "Microsoft YaHei", monospace; margin: 0; flex: 1;
 }
 
-/* ---------- 全局配置（OBS-3） ---------- */
+/* ---------- 全局配置 ---------- */
 .cfg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .cfg-note { color: var(--dim); font-size: 12px; margin: 0 0 12px; line-height: 1.6; }
 .cfg-note b { color: var(--warn); }

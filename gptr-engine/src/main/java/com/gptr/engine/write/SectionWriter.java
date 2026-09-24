@@ -70,6 +70,9 @@ public class SectionWriter {
     /** 已写节注入的字符预算（**≤0 = 关闭注入 = 现状等价**）。
           *  <p>把已写完的小节注入后续小节的写作上下文，抑制节间重复。 */
     private final int priorSectionsMaxChars;
+    /** 研报语言（配置驱动，经 {@code EngineConfig.language} → 本构造器注入 prompt）。
+     *  <p>约束**所有进报告的文本**（大纲标题 / 节标题 / 正文），但**不约束中间产物**。 */
+    private final String language;
     private final ObjectMapper mapper = new ObjectMapper();
 
     /** 大纲节。subQueryIdx：该节覆盖的输入子查询下标（0-based；LLM 坏输出=空 → 弱锚）。
@@ -110,14 +113,25 @@ public class SectionWriter {
         this(llm, sectionContextChars, retryOnUnauthorized, maxSections, NO_PRIOR_SECTIONS);
     }
 
-        /** 生产构造：{@code priorSectionsMaxChars ≤ 0} ⇒ 关闭已写节注入。 */
+    /** 兼容构造：{@code priorSectionsMaxChars ≤ 0} ⇒ 关闭已写节注入。
+     *  <p>⚠️ **语言取字面量"中文"**：本构造器只服务**不关心语言的测试**（大纲/归节的纯逻辑单测）
+     *  —— 它填的是**测试夹具**（本项目常量纪律明列"测试夹具不收"），不是生产默认值来源。
+     *  **生产路径必须走下面带 {@code language} 的构造器**（否则报告语言不受配置驱动）。 */
     public SectionWriter(LlmClient llm, int sectionContextChars, boolean retryOnUnauthorized,
                          int maxSections, int priorSectionsMaxChars) {
+        this(llm, sectionContextChars, retryOnUnauthorized, maxSections, priorSectionsMaxChars, "中文");
+    }
+
+    /** **生产构造**：{@code language} = 研报语言（配置驱动，见 {@code EngineConfig.language}）；
+     *  {@code priorSectionsMaxChars ≤ 0} ⇒ 关闭已写节注入。 */
+    public SectionWriter(LlmClient llm, int sectionContextChars, boolean retryOnUnauthorized,
+                         int maxSections, int priorSectionsMaxChars, String language) {
         this.llm = llm;
         this.sectionContextChars = sectionContextChars;
         this.retryOnUnauthorized = retryOnUnauthorized;
         this.maxSections = Math.max(MIN_SECTIONS, Math.min(MAX_SECTIONS_LIMIT, maxSections));
         this.priorSectionsMaxChars = priorSectionsMaxChars;
+        this.language = language;
     }
 
     // ------------------------------------------------------------------
@@ -137,15 +151,17 @@ public class SectionWriter {
         for (String q : subQueries) {
             qb.append("- ").append(q).append("\n");
         }
-        String system = DeepResearchPrompts.get("report-outline.system");
-        String user = DeepResearchPrompts.get("report-outline.user")
-                .replace("{query}", query == null ? "" : query)
-                .replace("{researchState}", researchState == null || researchState.isBlank()
-                        ? "(none)" : researchState)
-                .replace("{maxSections}", String.valueOf(maxSections))
-                .replace("{evidenceIndex}", evidenceIndex == null || evidenceIndex.isBlank()
-                        ? "(no evidence index available)" : evidenceIndex)
-                .replace("{queries}", qb.toString());
+        Map<String, String> outlineVars = new LinkedHashMap<>();
+        outlineVars.put("language", language);
+        outlineVars.put("query", query == null ? "" : query);
+        outlineVars.put("researchState", researchState == null || researchState.isBlank()
+                ? "(none)" : researchState);
+        outlineVars.put("maxSections", String.valueOf(maxSections));
+        outlineVars.put("evidenceIndex", evidenceIndex == null || evidenceIndex.isBlank()
+                ? "(no evidence index available)" : evidenceIndex);
+        outlineVars.put("queries", qb.toString());
+        String system = DeepResearchPrompts.get("report-outline.system", outlineVars);
+        String user = DeepResearchPrompts.get("report-outline.user", outlineVars);
         try {
             String raw = llm.chatJson(system, user);
             JsonNode root = parseJson(raw);
@@ -602,14 +618,16 @@ public class SectionWriter {
             return new SectionOutcome("## " + title + "\n\n"
                     + "（该节对应方面未检索到足够证据，本节从略）", 0, false);
         }
-        String system = DeepResearchPrompts.get("report-section.system");
         String authorized = authorizedUrls.isEmpty() ? "(none)" : String.join("\n", authorizedUrls);
-        String user = DeepResearchPrompts.get("report-section.user")
-                .replace("{title}", section.title())
-                .replace("{goal}", section.goal())
-                .replace("{notes}", notesText)
-                .replace("{authorizedUrls}", authorized)
-                .replace("{priorSections}", buildPriorBlock(priorSections));
+        Map<String, String> sectionVars = new LinkedHashMap<>();
+        sectionVars.put("language", language);
+        sectionVars.put("title", section.title());
+        sectionVars.put("goal", section.goal());
+        sectionVars.put("notes", notesText);
+        sectionVars.put("authorizedUrls", authorized);
+        sectionVars.put("priorSections", buildPriorBlock(priorSections));
+        String system = DeepResearchPrompts.get("report-section.system", sectionVars);
+        String user = DeepResearchPrompts.get("report-section.user", sectionVars);
         String markdown = llm.chat(system, user);
         int unauthorized = checkSection(markdown, authorizedUrls);
         boolean retried = false;

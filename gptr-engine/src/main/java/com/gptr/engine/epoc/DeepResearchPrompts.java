@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,6 +44,25 @@ public final class DeepResearchPrompts {
 
     public static String get(String key) {
         return PROPS.getProperty(key, "");
+    }
+
+    /**
+     * 取 prompt 并替换 {@code {name}} 占位符 —— **全项目唯一的 prompt 出口**。
+     *
+     * <p><b>只替换 {@code vars} 里列出的 key</b>，不做"凡 {@code {x}} 都换"——
+     * prompt 里含 JSON schema 字面量（如 {@code {"covered": ...}}），
+     * 通配替换会把它们当成占位符吃掉。
+     *
+     * <p>存在意义：在此之前 {@link com.gptr.engine.write.ReportWriter} **自持一份
+     * {@code Properties}** 并手工 {@code replace}，于是"报告语言"这类**跨 prompt 的公共变量**
+     * 只能在它那一处生效（逐节写作路径整个漏掉）。收敛到本方法后，注入点不再分散。
+     */
+    public static String get(String key, Map<String, String> vars) {
+        String text = PROPS.getProperty(key, "");
+        for (Map.Entry<String, String> e : vars.entrySet()) {
+            text = text.replace("{" + e.getKey() + "}", e.getValue());
+        }
+        return text;
     }
 
     /** 解析查询列表 JSON（容错：裸数组 / markdown 包裹 / 退化）。 */

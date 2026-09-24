@@ -87,26 +87,26 @@ function renderTasks(tasks) {
   const body = $("taskBody");
   body.replaceChildren();
   $("taskEmpty").hidden = tasks.length > 0;
-  for (const t of tasks) {
+  for (const task of tasks) {
     const tr = el("tr");
-    const badge = el("span", "status-badge " + t.status, t.status);
-    badge.title = t.errorCode ? "error: " + t.errorCode : t.status;
-    const mode = el("span", "mode-badge " + t.mode, t.mode === "deep_research" ? "deep" : "flat");
-    const q = el("td", "q", trunc(t.query, 60));
-    q.title = t.query;
-    q.onclick = () => openDrawer(t.id);
+    const badge = el("span", "status-badge " + task.status, task.status);
+    badge.title = task.errorCode ? "error: " + task.errorCode : task.status;
+    const mode = el("span", "mode-badge " + task.mode, task.mode === "deep_research" ? "deep" : "flat");
+    const q = el("td", "q", trunc(task.query, 60));
+    q.title = task.query;
+    q.onclick = () => openDrawer(task.id);
     const view = el("button", "btn", t("btn.view"));
-    view.onclick = () => openDrawer(t.id);
+    view.onclick = () => openDrawer(task.id);
     const cell = (node) => { const c = el("td"); c.appendChild(node); return c; };
     const actions = cell(view);
     tr.append(
       cell(badge),
       cell(mode),
       q,
-      el("td", "", String(t.attempt)),
-      el("td", "", String(t.stepsUsed)),
-      el("td", "", Number(t.costSpentUsd).toFixed(4)),
-      el("td", "", fmtDate(t.createdAt)),
+      el("td", "", String(task.attempt)),
+      el("td", "", String(task.stepsUsed)),
+      el("td", "", Number(task.costSpentUsd).toFixed(4)),
+      el("td", "", fmtDate(task.createdAt)),
       actions);
     body.appendChild(tr);
   }
@@ -144,8 +144,8 @@ function openDrawer(id) {
   drawerState.stage = {};
   drawerState.reportLoaded = false;
   drawerState.reportChars = null;
-  // 修复（实测）：切换任务时若上次停在"证据库"页签，旧任务的证据 DOM 会残留显示在新任务
-  // 标题下（q04 的 570 条出现在 Code agents 上）。打开任务一律回到时间线页签并清空旧证据。
+  // 打开任务一律回到时间线页签并清空旧证据：否则上次停在"证据库"时，
+  // 旧任务的证据 DOM 会残留显示在新任务标题下。
   drawerState.tab = "timeline";
   switchTab("timeline");
   $("drawer").hidden = false;
@@ -159,30 +159,30 @@ function openDrawer(id) {
 
 async function loadTask(id) {
   try {
-    const t = await j("GET", API + "/" + id);
-    drawerState.task = t;
-    drawerState.mode = t.mode;
+    const task = await j("GET", API + "/" + id);
+    drawerState.task = task;
+    drawerState.mode = task.mode;
     renderStageStrip();
-    renderDrawerHead(t);
-    renderDrawerMeta(t);
+    renderDrawerHead(task);
+    renderDrawerMeta(task);
   } catch (e) {
     $("dMeta").textContent = t("msg.loadFailed", { msg: e.message });
   }
 }
 
-function renderDrawerHead(t) {
-  $("dStatus").textContent = t.status;
-  $("dStatus").className = "status-badge " + t.status;
+function renderDrawerHead(task) {
+  $("dStatus").textContent = task.status;
+  $("dStatus").className = "status-badge " + task.status;
   const mode = $("dMode");
-  mode.textContent = t.mode === "deep_research" ? "deep_research" : "flat";
-  mode.className = "mode-badge " + t.mode;
-  $("dQuery").textContent = t.query;
-  const running = t.status === "RUNNING" || t.status === "PENDING";
+  mode.textContent = task.mode === "deep_research" ? "deep_research" : "flat";
+  mode.className = "mode-badge " + task.mode;
+  $("dQuery").textContent = task.query;
+  const running = task.status === "RUNNING" || task.status === "PENDING";
   $("dCancel").disabled = !running;
-  $("dRetry").disabled = t.status !== "FAILED";
+  $("dRetry").disabled = task.status !== "FAILED";
 }
 
-function renderDrawerMeta(t) {
+function renderDrawerMeta(task) {
   const m = $("dMeta");
   m.replaceChildren();
   const kv = (k, v) => {
@@ -191,16 +191,16 @@ function renderDrawerMeta(t) {
     return s;
   };
   m.append(
-    kv(t("meta.mode"), t.mode), kv(t("meta.attempts"), t.attempt + "/" + t.maxAttempts),
-    kv(t("meta.steps"), t.stepsUsed), kv(t("meta.cost"), "$" + Number(t.costSpentUsd).toFixed(4)),
-    kv(t("meta.created"), fmtDate(t.createdAt)),
-    kv(t("meta.started"), t.startedAt ? fmtDate(t.startedAt) : "–"),
-    kv(t("meta.finished"), t.finishedAt ? fmtDate(t.finishedAt) : "–"));
+    kv(t("meta.mode"), task.mode), kv(t("meta.attempts"), task.attempt + "/" + task.maxAttempts),
+    kv(t("meta.steps"), task.stepsUsed), kv(t("meta.cost"), "$" + Number(task.costSpentUsd).toFixed(4)),
+    kv(t("meta.created"), fmtDate(task.createdAt)),
+    kv(t("meta.started"), task.startedAt ? fmtDate(task.startedAt) : "–"),
+    kv(t("meta.finished"), task.finishedAt ? fmtDate(task.finishedAt) : "–"));
   const err = $("dError");
-  if (t.status === "FAILED" && (t.errorCode || t.errorDetail)) {
+  if (task.status === "FAILED" && (task.errorCode || task.errorDetail)) {
     err.hidden = false;
-    err.textContent = (t.errorCode ? "[" + t.errorCode + "] " : "") +
-      (t.errorDetail ? trunc(t.errorDetail, 400) : t("meta.noErrorDetail"));
+    err.textContent = (task.errorCode ? "[" + task.errorCode + "] " : "") +
+      (task.errorDetail ? trunc(task.errorDetail, 400) : t("meta.noErrorDetail"));
   } else {
     err.hidden = true;
   }
@@ -321,10 +321,10 @@ function buildEventRow(ev) {
   const sub = el("div", "tl-sub");
 
   const T = ev.type;
-  const plain = (t, ic, cls, subText) => {
+  const plain = (text, ic, cls, subText) => {
     icon.textContent = ic;
     if (cls) row.classList.add(cls);
-    label.textContent = t;
+    label.textContent = text;
     if (subText) sub.textContent = subText;
   };
 
@@ -419,7 +419,7 @@ function switchTab(tab) {
   if (tab === "report") loadReport(false);
 }
 
-/* ---- 证据库页签（OBS-2.5：重快照按需拉取，不进 WS） ---- */
+/* ---- 证据库页签（重快照按需拉取，不进 WS） ---- */
 const evOpen = new Set(); // 已展开全文的 note idx（会话内记忆）
 
 async function loadEvidence() {
@@ -550,7 +550,7 @@ async function doRetry() {
   } catch (e) { alert(t("msg.retryFailed", { msg: e.message })); }
 }
 
-/* ---------------- 提交弹窗（含 OBS-2.5 Fork 蓝图） ---------------- */
+/* ---------------- 提交弹窗（含 Fork 蓝图） ---------------- */
 const submitState = { blueprint: null }; // 非空 = 以某任务 config 为底，提交时 merge
 
 const numOr = (v, d) => (typeof v === "number" && v > 0 ? v : d);
@@ -664,7 +664,7 @@ async function submitResearch(ev) {
   }
 }
 
-/* OBS-2.5 Fork：源任务 → template 蓝图 → 预填弹窗（原任务不受影响） */
+/* Fork：源任务 → template 蓝图 → 预填弹窗（原任务不受影响） */
 async function openForkDialog() {
   const id = drawerState.taskId;
   if (!id) return;
@@ -676,7 +676,7 @@ async function openForkDialog() {
   }
 }
 
-/* ---------------- 全局配置（OBS-3：保存后重启 worker 生效，无热加载） ---------------- */
+/* ---------------- 全局配置（保存后重启 worker 生效，无热加载） ---------------- */
 const CONFIG_API = "/api/v1/config";
 let cfgRows = []; // 最近一次 GET 的配置视图
 

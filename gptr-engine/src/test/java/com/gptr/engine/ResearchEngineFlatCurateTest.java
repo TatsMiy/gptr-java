@@ -91,7 +91,7 @@ class ResearchEngineFlatCurateTest {
         task.setConfig(config);
         SearchClient search = mockSearch();
         return new ResearchEngineImpl(task, new ResearchEngineImpl.EngineDeps(
-                new SubQueryPlanner(llm), new Searcher(search), llm, search, new ReportWriter(llm),
+                new SubQueryPlanner(llm), new Searcher(search), llm, search, new ReportWriter(llm, "中文"),
                 null, new ContextManager(), null));
     }
 

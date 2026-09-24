@@ -270,7 +270,7 @@ public class ResearchEngineImpl implements ResearchEngine {
         this.distillGate = distillGate;
         this.sectionWriter = new SectionWriter(deps.llmClient(),
                 cfg.sectionContextChars, cfg.sectionRetryOnUnauthorized, cfg.maxSections,
-                cfg.priorSectionsMaxChars);
+                cfg.priorSectionsMaxChars, cfg.language);
         // 直引归节开关 + 证据目录预算
         this.assignByCitation = cfg.assignByCitation;
         this.evidenceIndexMaxChars = cfg.evidenceIndexMaxChars;
@@ -1003,9 +1003,8 @@ public class ResearchEngineImpl implements ResearchEngine {
     private String writeTakeaways(String sectionsPreview) {
         try {
             String system = DeepResearchPrompts.get("report-takeaways.system");
-            String user = DeepResearchPrompts.get("report-takeaways.user")
-                    .replace("{query}", query)
-                    .replace("{sections}", sectionsPreview);
+            String user = DeepResearchPrompts.get("report-takeaways.user",
+                    Map.of("language", language, "query", query, "sections", sectionsPreview));
             return llmClient.chat(system, user).trim();
         } catch (Exception e) {
             return ""; // 无 takeaways 不失败

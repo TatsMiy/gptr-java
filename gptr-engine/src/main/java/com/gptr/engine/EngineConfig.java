@@ -68,15 +68,12 @@ final class EngineConfig {
     /** extract 按子查询独立提炼（默认 true=对标 py 每子查询独立研究；false=旧整层一次）。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final boolean perQueryExtract;
-    /** 来源质量闸（**默认 false**）。三题双臂实测曾显示
-     *  "跨领域噪声 11 处 → 0、兜底节 43 条 → 3 条"（当时据此默认开）。
-     *  <p>⚠️ 改为默认 false 的依据：那次验收的**适用域未覆盖"组内条目数 > {@link #curatorMaxSources}"区间** ——
-     *  当时 {@code maxResults} 为默认 5 ⇒ 组内 7 条 &lt; 10 ⇒ 两道闸（保留数 / 候选可见性）
-     *  **均未触发，curate 实为空转**。而一旦组内条目数越过该闸（如 {@code maxResults=20}），
-     *  排在组尾的**已抓取正文块被整批丢弃**：实测 note 62 → 34、extract {@code joinedChars}
-     *  6783 → 2000、具名基准 9 → 0。
-     *  ⇒ 在候选池混装问题修复前默认关。
-     *  <p>开则 SUMMARIZING/RESEARCH curate 节点介入，排序精选、坏输出回退原文。 */
+    /** 来源质量闸（**默认 false**）。
+     *  <p>开：SUMMARIZING / RESEARCH 阶段由 curate 节点介入，排序精选，坏输出回退原文；
+     *  关：候选直接进入下阶段。
+     *  <p><b>为什么默认关</b>：该闸的触发条件是**单组条目数 &gt; {@link #curatorMaxSources}**。
+     *  未越阈值时 curate 实为空转；越过后，**排在组尾的已抓取正文块会被整批丢弃**
+     *  （「保留数」与「候选可见性」两道闸同时生效）。因此，候选池混装问题修复前保持关闭。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final boolean curateSources;
     /** 关口 A（实验键，**默认 false**）：取名前对候选来源**按 URL 分档**重排，
@@ -123,7 +120,12 @@ final class EngineConfig {
             evidence = "2026-09-10 三题双臂物料验收：直通臂在体量/报告长度/成本三项全面优于提炼臂"
                     + "（关键点遗漏率口径尚未对照，不阻塞结案）")
     final boolean extractOnDistilled;
-    /** 研报语言（默认"中文"；zh/中文→中文，en/english→English，其它透传）。 */
+    /** 研报语言（默认"中文"；zh/中文→中文，en/english→English，其它透传）。
+     *  <p><b>覆盖范围</b>：约束**所有进报告的文本** —— 大纲与节标题（{@code report-outline}）、
+     *  正文（{@code report-section}）、开头要点（{@code report-takeaways}）、
+     *  层间反思状态（{@code plan-reflect}）。
+     *  <p><b>不约束中间产物</b>（检索查询 / 提炼 / 精选 / 评分）—— 那些的语言必须跟随**源材料**，
+     *  否则会同时损害召回（拿英文查询去检索中文题）与引用保真（quote 要求逐字）。 */
     @ConfigKey(kind = Kind.STABLE, owner = "gptr-dev", added = "2026-09-17")
     final String language;
     /** 层间计划反思（默认 true：每层 extract 后生成中央研究状态 researchState，

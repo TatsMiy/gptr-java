@@ -147,7 +147,7 @@
       "form.steps": "步骤上限",
       "form.timeLimit": "时长上限(秒)",
       "form.costLimit": "成本上限($)",
-      "form.retriever": "retriever（留空 = 默认链）",
+      "form.retriever": "retriever（可下拉选，留空 = 默认链）",
 
       /* 配置弹窗 */
       "cfg.title": "全局运行配置",
@@ -310,7 +310,7 @@
       "form.steps": "Step limit",
       "form.timeLimit": "Time limit (s)",
       "form.costLimit": "Cost limit ($)",
-      "form.retriever": "Retriever (blank = default chain)",
+      "form.retriever": "Retriever (pick from list or type freely; blank = default chain)",
 
       /* Config dialog */
       "cfg.title": "Global runtime config",

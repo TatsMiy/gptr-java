@@ -21,12 +21,14 @@ import org.junit.jupiter.api.Test;
  *
  * <p>读静态文件即可，**不需要浏览器、不需要 Spring context**。
  *
- * <p>它拦的是"漏翻一处"——这类错误会随每次改界面反复发生，靠肉眼必然漏。四条判据：
+ * <p>它拦的是两类会**随每次改界面反复发生**、靠肉眼必然漏的错误。五条判据：
  * <ol>
  *   <li>词典 {@code zh} / {@code en} 的 key 集合完全相同；</li>
  *   <li>词典与「HTML 引用 + JS 引用」三方互相覆盖（无孤儿、无缺失）；</li>
  *   <li>{@code index.html} 里含中文的行必须带 {@code data-i18n}（默认文本只作 JS 未加载时的兜底）；</li>
  *   <li>{@code dashboard.js} 剥离注释后不得有含中文的字符串字面量（白名单见 {@link #JS_ALLOW}）。</li>
+ *   <li><b>漏翻之外的另一类</b>：{@code t} 这个全局翻译函数**不得被局部绑定遮蔽** ——
+ *       它会静默地让界面报 {@code t is not a function}，而判据 1–4 全绿也照样发生。</li>
  * </ol>
  */
 class DashboardI18nTest {
@@ -56,6 +58,13 @@ class DashboardI18nTest {
      * 协议字符串**，不是 UI 文案 —— 禁止进词典。
      */
     private static final List<String> JS_ALLOW = List.of("\"中文\"");
+
+    /**
+     * `t` 的**唯一合法定义源**：从 I18N 解构出翻译函数本身（`const { t } = window.I18N;`）。
+     *
+     * <p>判据 5 必须放行它 —— 否则该判据会在第一行就误报。
+     */
+    private static final Pattern T_DESTRUCTURE = Pattern.compile("\\{[^}]*\\bt\\b[^}]*\\}\\s*=");
 
     private static List<String> lines(Path p) throws IOException {
         return Files.readAllLines(p, StandardCharsets.UTF_8);
@@ -146,6 +155,45 @@ class DashboardI18nTest {
         }
         if (!bad.isEmpty()) {
             fail("dashboard.js 剥离注释后仍有含中文的字符串字面量（应改用 t(key)）:\n"
+                    + String.join("\n", bad));
+        }
+    }
+
+    // ── 判据 5 ────────────────────────────────────────────────────────────────
+    /**
+     * {@code t} 是 i18n 暴露的**全局翻译函数**，因此它在 {@code dashboard.js} 里
+     * **唯一的合法出现形态就是被调用**（{@code t("key")}）。任何"独立出现、后面却不跟
+     * {@code (}"的写法，都说明它被局部绑定遮蔽了 —— 该作用域内的 {@code t("…")} 会在运行时报
+     * {@code t is not a function}。
+     *
+     * <p>为什么单列这条：判据 1–4 全是"文案层"检查，而且 {@link #JS_T} **默认 `t` 就是翻译函数**。
+     * 于是遮蔽一旦发生，判据 2 反倒把 {@code t("btn.view")} 记成一次正常引用 ——
+     * **静态假设与运行时现实脱节：四条判据全绿，界面照样报错**。
+     * 这是"能机械检查、却没人检查"的典型，故补在此处。
+     *
+     * <p>{@link #T_DESTRUCTURE}（从 I18N 解构）是唯一被放行的形态。
+     */
+    @Test
+    void tIsOnlyEverCalled() throws IOException {
+        Pattern standaloneT = Pattern.compile("(?<![\\w.$])t(?![\\w$])");
+        List<String> bad = new ArrayList<>();
+        List<String> src = stripComments(lines(JS));
+        for (int i = 0; i < src.size(); i++) {
+            String line = src.get(i);
+            if (T_DESTRUCTURE.matcher(line).find()) {
+                continue;
+            }
+            Matcher m = standaloneT.matcher(line);
+            while (m.find()) {
+                if (!line.substring(m.end()).stripLeading().startsWith("(")) {
+                    bad.add("  dashboard.js:" + (i + 1) + "  " + line.trim());
+                    break;
+                }
+            }
+        }
+        if (!bad.isEmpty()) {
+            fail("dashboard.js 里 `t` 没有以调用形式出现 —— 它已被局部绑定遮蔽了"
+                    + "（`t` 是全局翻译函数；遮蔽后同作用域内的 t(\"…\") 会报 `t is not a function`）:\n"
                     + String.join("\n", bad));
         }
     }
