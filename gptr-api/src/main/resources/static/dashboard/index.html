@@ -157,8 +157,9 @@
         <label><span data-i18n="form.retriever">retriever（可下拉选，留空 = 默认链）</span>
           <!-- 候选值取自 crawler 的检索器注册表（crawler/pycrawler/retrievers/）。
                用 datalist 而非 select：既给下拉候选，又允许填清单外的值（自定义检索器）。
-               ⚠️ 这里填的是**任务 config 的 retriever**（crawler 侧）—— 与 worker 启动参数
-                  `gptr.clients.search-chain`（duckduckgo|python）是两层命名，不要混（见 BUILD.md §5.0.1）。 -->
+               ⚠️ 这里填的是**任务 config 的 retriever**（crawler 侧）—— 与 worker 的**启动参数**
+                  `gptr.clients.search-chain`（取值为 duckduckgo 或 python）是**两层不同的命名**：
+                  把 crawler 的检索器名填进启动参数会导致**直接启动失败**。 -->
           <input type="text" id="fRetriever" list="retrieverOptions" placeholder="bocha">
           <datalist id="retrieverOptions">
             <option value="bocha"></option>
