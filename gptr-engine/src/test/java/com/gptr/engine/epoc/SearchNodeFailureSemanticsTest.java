@@ -103,7 +103,8 @@ class SearchNodeFailureSemanticsTest {
     /** 节点动作（装配层形态：node_async 包装同步业务方法；异常须包进 Future）。 */
     private static AsyncNodeAction<DeepResearchState> searchAction(SearchClient client) {
         return AsyncNodeAction.node_async(state -> SearchNode.runSearch(
-                state, client, SearchOptions.DEFAULT, Budgets.defaults().retrieval()));
+                state, client, SearchOptions.DEFAULT, Budgets.defaults().retrieval(),
+                "test-request-id"));
     }
 
 }

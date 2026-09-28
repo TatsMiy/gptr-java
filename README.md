@@ -15,19 +15,31 @@ Resilience4j · vanilla JS 观测台
 
 ## 特性
 
-- **递归研究引擎**：澄清前奏 → 多轮 `breadth × decay` 递归（learnings 驱动 + 计划反思）
-  → per-query 证据提炼 → 大纲先行逐节写作（节级引用闸门 + 机械 References）
-- **结构化证据库**：每条 `insight` 配**逐字** `quote` 与来源 URL，以 JSON 入库 ⇒ 可审计、可回放
-- **引用真实性双闸**：模型只能引用"已检索且已提炼"的授权来源；引用 URL 经 canonical
-  规范化后与来源集比对。**对照实测**：`d1` 引用一致性 **1.0**、`d2` 矛盾陈述 **0**
-- **任务底座**：Postgres 队列（原子出队）+ 租约与阶段内续租守护（防脑裂）+ 预算三件套
-  （步骤 / 时长 / 成本）+ `ownerToken` fence + 优雅重试
-- **Web 观测台**（`/dashboard/`，零依赖单页）：WS 实时事件时间线、任务列表与统计、
-  报告阅读、证据库浏览、Fork 为蓝图、配置面板
-- **可审计评测器**（`gptr-benchmark`）：micro-gold **判官自检**（先测判官再信分）+ 双口径
-  准确率 + 三态幻觉反证（句子–引用源绑定）+ 引用一致性 / 覆盖 + A/B 双跑盲判
-- **测试与门禁**：engine **225** 单测 · benchmark **37** 单测 · 集成 **14 类 / 22 用例**；
-  可读性门禁 13 项判据随 `mvn test` 自动执行
+**研究能力**
+
+- **多轮递归，而不是一问一答**：先澄清问题，再按 `breadth × decay` 逐层检索；每层结束把
+  "已覆盖什么、还缺什么" 写进研究计划，下一层的查询由这份计划生成。
+- **先大纲、再逐节写作**：每节单独查证据、单独写，并注入已写好的前文以避免重复。
+- **可审计的证据库**：每条结论都带**逐字原文**与来源 URL，以 JSON 入库 —— 事后可以逐条复核。
+
+**可信度**
+
+- **只允许引用真实来源**：模型可用的 URL 限定在"已检索且已提炼"的白名单内，
+  引用越界会被核验拦下。对照实测：引用一致性 **1.00**、矛盾陈述 **0**。
+- **参考文献由程序生成**：正文引用编号为 `[n]`，文末来源表由代码生成，不靠模型自行排列。
+- **判官先自检再打分**：评测器先注入已知答案句测判官，判官可信之后才采信它的评分。
+
+**工程**
+
+- **任务底座**：Postgres 队列（原子出队）+ 租约续租守护（防脑裂）+ 步骤 / 时长 / 成本
+  三重预算 + 优雅重试。
+- **零依赖观测台**（`/dashboard/`，单页）：实时事件时间线、任务与成本统计、报告阅读、
+  证据库浏览、配置面板、Fork 为蓝图；另有「爬虫」页签 —— 上半是本进程窗口的抓取计数
+  （失败构成 / 按域名 Top-10 / 耗时 p50,p95 / 页型与状态码类 / 截断 / 检索每查询结果数），
+  下半是该任务的抓取体检（检索→取名→抓成→有效 漏斗、静默丢失、**引用未读源比例**、失败样本）。
+- **测试与门禁**：engine **248** 单测 · crawler **81** 单测（`python -m unittest discover -s tests`）·
+  benchmark **45** 单测 · 集成 **14 类 / 22 用例**；
+  可读性门禁 13 项判据随 `mvn test` 自动执行。
 
 ## 快速开始
 
@@ -59,32 +71,23 @@ curl -X POST http://localhost:8080/api/v1/tasks \
 
 ## 来源、借鉴与偏离
 
-本项目研读并逐条判决了 **7 篇** 2025–2026 的 deep research 论文（综合判决见仓库内设计记录），
-下表是**实际落点** —— 每条都标了是"已实施 / 有意偏离 / 未采纳"：
+本项目研读并逐条判决了 **7 篇** 2025–2026 的 deep research 论文，下表是**实际落点**
+—— 每条都标了是"已实施 / 有意偏离 / 未采纳"：
 
 | 机制 | 出处 | 落点 |
 |---|---|---|
-| 三态判定协议（Supported / Contradictory / Inconclusive）+ 反证判据 | **DeepFact**（ACL-26 Long）| ✅ 已实施：D2 判定协议（含每句 evidence 输出与 verdict 白名单）|
-| **micro-gold 判官自检**（注入已知答案句先测判官，再信它的分）| **DeepFact** | ✅ 已实施：30 条机器锚定探针（1:4 对抗注入）|
-| KAE-lite 引用覆盖（KSR / KCR / KOR + 第四态 `abstain`）| **DeepResearch Arena**（AAAI-26）| ✅ 已实施：从"引用"出发查报告是否把关键事实写全 |
-| 题集"禁止来源"字段 + 泄漏率上报（工具层屏蔽 URL）| **DeepResearch Bench II** | ✅ 已实施：`blockedUrls` + 检索结果层过滤（比论文"建议但未落地"更彻底）|
+| 三态判定协议（Supported / Contradictory / Inconclusive）+ 反证判据 | **[DeepFact](https://doi.org/10.18653/v1/2026.acl-long.1586)** | ✅ 已实施：D2 判定协议（含每句 evidence 输出与 verdict 白名单）|
+| **micro-gold 判官自检**（注入已知答案句先测判官，再信它的分）| DeepFact | ✅ 已实施：30 条机器锚定探针（1:4 对抗注入）|
+| KAE-lite 引用覆盖（KSR / KCR / KOR + 第四态 `abstain`）| **[DeepResearch Arena](https://doi.org/10.1609/aaai.v40i39.40620)** | ✅ 已实施：从"引用"出发查报告是否把关键事实写全 |
+| 题集"禁止来源"字段 + 泄漏率上报（工具层屏蔽 URL）| **[DeepResearch Bench II](https://doi.org/10.48550/arXiv.2601.08536)** | ✅ 已实施：`blockedUrls` + 检索结果层过滤（比论文"建议但未落地"更彻底）|
 | rubric 原子化 / 内容承载写法 + 自评闸门 | DeepResearch Bench II | 参考（用于题库入库流程）|
-| 证据条目结构（`insight` 与 `quote` 分离）| **WebWeaver**（arXiv `2509.13312v3`）| ✅ 已实施，并补 canonical 规范化与授权集校验 |
-| 逐节写作 + 节级引用闸门 | **WebWeaver** + **FS-Researcher**（ACL-26 Long `2026.acl-long.288`）| ✅ 已实施。⚠️ 两篇结论**相反**：WebWeaver 警告逐节写作导致 *content and style incoherence*、主张节间连续叙事；FS-Researcher 的消融则认为逐节更优。本项目早期只采纳了"上下文隔离"，2026-09-19 以**已写节注入**补回全局连贯（重复度 8.0 → 5.75，双跑一致）|
-| 层间 plan 反思 / 中央研究状态 | **Reflect-Evolve** | ✅ 已实施：`plan_reflect` 节点（层末写"已覆盖 vs 缺口"，下轮查询生成读它）|
-| 显式 plan + 允许修订 | **DEEPPLANNER**（ACL-26 Findings）| 哲学采纳（research plan 作为受管理状态；其 RL 训练管线不做）|
+| 证据条目结构（`insight` 与 `quote` 分离）| **[WebWeaver](https://doi.org/10.48550/arXiv.2509.13312)** | ✅ 已实施，并补 canonical 规范化与授权集校验 |
+| 逐节写作 + 节级引用闸门 | WebWeaver + **[FS-Researcher](https://doi.org/10.18653/v1/2026.acl-long.288)** | ✅ 已实施。⚠️ 两篇结论**相反**：WebWeaver 警告逐节写作导致 *content and style incoherence*、主张节间连续叙事；FS-Researcher 的消融则认为逐节更优。本项目早期只采纳了"上下文隔离"，2026-09-19 以**已写节注入**补回全局连贯（重复度 8.0 → 5.75，双跑一致）|
+| 层间 plan 反思 / 中央研究状态 | **[Reflect-Evolve](https://doi.org/10.48550/arXiv.2601.20843)** | ✅ 已实施：`plan_reflect` 节点（层末写"已覆盖 vs 缺口"，下轮查询生成读它）|
+| 显式 plan + 允许修订 | **[DeepPlanner](https://doi.org/10.18653/v1/2026.findings-acl.370)** | 哲学采纳（research plan 作为受管理状态；其 RL 训练管线不做）|
 | 蒸馏 / 脱水选句 | WebWeaver | ⚠️ **有意偏离**：论文用 LLM 生成 query-relevant summary（有损，且**无 fidelity 审计**）；本项目改为「**只删不改 + Java 程序化保真前检**」—— 因为 `quote` 的语义价值恰恰是"逐字" |
 | "写完即剪"（write-then-prune）| WebWeaver | ❌ **未采纳**：本项目不累积证据（每节按需取用），无物可剪 |
 | 来源质量闸（curate）| **gpt-researcher** `SourceCurator` | ⚠️ 移植时**自加了 prompt 输入预算**（原版**没有**任何字符预算）。2026-09-20 实测：候选一多，该预算会把**已抓取的正文块整批丢掉**（note 62 → 34）⇒ 已翻回默认关 |
-
-**明确不抄**（及理由）：
-
-- **ACE 式无锚 checklist**（Arena）—— LLM 当场自定判据再自评，是自证闭环；
-- **WebWeaver 的"全 LLM 证据抽取且无审计"** —— 我们保留原文复核通道与程序化保真前检；
-- **Reflect-Evolve 的 Crossover 与"LLM 自评 90% 停机"** —— 前者是无判官无修订的答案合并（幻觉放大器），后者判官无校准；
-- **DeepFact 的全文献开放域判定作为默认**（$1.16/claim）—— 只作 D2 的对抗升级，不做每任务默认；
-- **DEEPPLANNER 的训练管线**（48 步需 24h×8×A100）—— 产品型推理服务不承担训练；
-- **Bench II 的单点专家文章 gold 全盘照搬**（Analysis 视角锁死、维度权重失衡）—— 只抄其 rubric 原子写法与自评闸门。
 
 ## 与 gpt-researcher 的关系与差异
 
@@ -157,13 +160,12 @@ Apache-2.0，见 [LICENSE](LICENSE)。归属与致谢：
 
 **论文**（逐篇的借鉴点与偏离见 [§来源、借鉴与偏离](#来源借鉴与偏离)）
 
-- **DeepFact**（ACL-26 Long）—— 三态判定协议与 micro-gold 判官自检
-- **DeepResearch Arena**（AAAI-26）—— KAE 引用覆盖维度
-- **DeepResearch Bench II**（arXiv）—— rubric 原子写法、自评闸门、工具层泄漏屏蔽
-- **WebWeaver**（arXiv [`2509.13312v3`](https://arxiv.org/abs/2509.13312)）——
-  证据记忆库形态、分节写作与 citation 锚定
-- **Reflect-Evolve**（arXiv）—— 中央研究上下文与层间 plan 反思
-- **DEEPPLANNER**（ACL-26 Findings）—— "显式 plan + 允许修订"的规划哲学
-- **FS-Researcher**（ACL-26 Long，`2026.acl-long.288`）—— 逐节写作的消融口径与节级引用闸门
+- [DeepFact: Co-Evolving Benchmarks and Agents for Deep Research Factuality](https://doi.org/10.18653/v1/2026.acl-long.1586)（ACL 2026）—— 三态判定协议与 micro-gold 判官自检
+- [Deep Research Arena: The First Exam of LLMs' Research Abilities via Seminar-Grounded Tasks](https://doi.org/10.1609/aaai.v40i39.40620)（AAAI-26）—— KAE 引用覆盖维度
+- [DeepResearch Bench II: Diagnosing Deep Research Agents via Rubrics from Expert Report](https://doi.org/10.48550/arXiv.2601.08536)（arXiv）—— rubric 原子写法、自评闸门、工具层泄漏屏蔽
+- [WebWeaver: Structuring Web-Scale Evidence with Dynamic Outlines for Open-Ended Deep Research](https://doi.org/10.48550/arXiv.2509.13312)（arXiv）—— 证据记忆库形态、分节写作与 citation 锚定
+- [Deep Researcher Reflect Evo: Sequential Plan Refinement for Deep Research Agents](https://doi.org/10.48550/arXiv.2601.20843)（arXiv）—— 中央研究上下文与层间 plan 反思
+- [DeepPlanner: Scaling Planning Capability for Deep Research Agents via Advantage Shaping](https://doi.org/10.18653/v1/2026.findings-acl.370)（ACL 2026 Findings）—— "显式 plan + 允许修订"的规划哲学
+- [FS-Researcher: Test-Time Scaling for Long-Horizon Research Tasks with File-System-Based Agents](https://doi.org/10.18653/v1/2026.acl-long.288)（ACL 2026）—— 逐节写作的消融口径与节级引用闸门
 
 详见 [NOTICE](NOTICE)。

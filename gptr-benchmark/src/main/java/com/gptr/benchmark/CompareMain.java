@@ -205,7 +205,8 @@ public final class CompareMain {
         CitationConsistency.Result r = CitationConsistency.calculate(report);
         ObjectNode o = row.putObject("d1" + cap(side));
         o.put("inText", r.inTextCitations());
-        o.put("unreferenced", r.unreferencedInText());
+        o.put("dangling", r.dangling());
+        o.put("uncitedRefs", r.uncitedRefs());
         o.put("consistency", Math.round(r.consistency() * 10000.0) / 10000.0);
     }
 

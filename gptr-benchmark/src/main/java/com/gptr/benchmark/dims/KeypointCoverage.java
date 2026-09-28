@@ -2,6 +2,7 @@ package com.gptr.benchmark.dims;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.gptr.benchmark.llm.JudgeClient;
+import com.gptr.engine.write.CitationVerifier;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -80,7 +81,9 @@ public final class KeypointCoverage {
     /** 判 KAE-lite；报告无内联引用 / 无可用源 / 无关键点 → null。 */
     public Result calculate(String report, JudgeClient judge) {
         ReportText.Split split = ReportText.split(report);
-        List<ReportText.Sentence> sentences = ReportText.sentences(split.body(), 40);
+        // 编号化报告的正文只有 [n]，须经参考文献表的编号表反解才能取到逐句来源
+        List<ReportText.Sentence> sentences = ReportText.sentences(split.body(), 40,
+                CitationVerifier.referenceIndex(split.references()));
         LinkedHashSet<String> urls = new LinkedHashSet<>();
         for (ReportText.Sentence s : sentences) {
             urls.addAll(s.citationUrls());

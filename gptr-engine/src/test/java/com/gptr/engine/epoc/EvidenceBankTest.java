@@ -98,7 +98,8 @@ class EvidenceBankTest {
                         new DeepResearchGraph.ExtractOptions(perQuery, true),
                         new DeepResearchGraph.CurateOptions(false, 10),
                         new DeepResearchGraph.FollowUpOptions(true, 0.5, false)),
-                Budgets.defaults());
+                Budgets.defaults(),
+                "test-request-id");
     }
 
     @Test

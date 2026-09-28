@@ -7,8 +7,8 @@ import com.gptr.engine.search.DuckDuckGoSearchClient;
 import com.gptr.engine.search.PythonCrawlerSearchClient;
 import com.gptr.engine.search.RetrieverKeys;
 import com.gptr.integration.client.LlmClient;
+import com.gptr.integration.client.ScrapeBatch;
 import com.gptr.integration.client.ScraperClient;
-import com.gptr.integration.client.ScrapedContent;
 import com.gptr.integration.client.SearchClient;
 import com.gptr.integration.client.SearchOptions;
 import com.gptr.integration.client.SearchResponse;
@@ -149,11 +149,19 @@ public class EngineClientsConfig {
             // 每个步骤返回自带源名的 SearchResponse，短路成功后 sourceUsed=
             // 实际命中步（评审 #2：命中源随结果显式返回，不靠隐式上下文）
             public SearchResponse search(String query, SearchOptions opts) {
+                return search(query, opts, "");
+            }
+
+            @Override
+            // 关联 id 必须一路带到真实客户端；漏掉这一层它会在包装处静默消失
+            // （接口默认实现只转发不带 id 的重载，调用方看不出差别）。
+            public SearchResponse search(String query, SearchOptions opts, String requestId) {
                 List<FallbackChain.Step<SearchResponse>> steps = sources.stream()
                         .map(s -> new FallbackChain.Step<>(s.client.name(),
                                 ResilienceBeans.protectedSupplier(
                                         () -> new SearchResponse(
-                                                s.client.search(query, opts).results(), s.client.name()),
+                                                s.client.search(query, opts, requestId).results(),
+                                                s.client.name()),
                                         s.retry, s.breaker)))
                         .toList();
                 return FallbackChain.execute(steps);
@@ -232,16 +240,13 @@ public class EngineClientsConfig {
             }
 
             @Override
-            public java.util.List<ScrapedContent> scrape(java.util.List<String> urls) {
-                return ResilienceBeans.protectedSupplier(() -> client.scrape(urls), retry, breaker).get();
-            }
-
-            @Override
-            public java.util.List<ScrapedContent> scrape(java.util.List<String> urls, int maxCharsPerUrl) {
-                // 修复（B 臂实测）：此前未 override 两参版本 → 掉进 ScraperClient 接口
-                // default 实现丢弃 maxChars → crawler 恒 4000 截断——flat 蒸馏与 deep 选句
-                // 蒸馏从未真正拿到长文（mock 测试掩盖）。两参透传，重试/熔断语义与单参一致。
-                return ResilienceBeans.protectedSupplier(() -> client.scrape(urls, maxCharsPerUrl),
+            // 三个 scrape 重载在接口侧已收成"转发到本方法"，故包装层只需实现这一条：
+            // 参数与逐 URL 交代都必须穿过它，漏一个就会在包装处静默消失
+            // （不带交代的方法曾让 maxChars 与关联 id 先后在这里被吞掉）。
+            public ScrapeBatch scrapeDetailed(java.util.List<String> urls, int maxCharsPerUrl,
+                                              String requestId) {
+                return ResilienceBeans.protectedSupplier(
+                        () -> client.scrapeDetailed(urls, maxCharsPerUrl, requestId),
                         retry, breaker).get();
             }
         };

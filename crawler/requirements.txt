@@ -24,6 +24,7 @@ arxiv>=2.1
 # ---- 可选依赖（选中对应检索器/抓取后端时才需要，镜像默认不装）----
 tavily-python>=0.5    # tavily 检索/抓取（key 走观测台配置或 TAVILY_API_KEY）
 exa-py>=1.0           # exa 检索（key 走观测台配置或 EXA_API_KEY）
+trafilatura>=2.0      # 默认抓取后端的主内容抽取（带入 courlan/htmldate/justext 等约 10 个包）
 # firecrawl-py         # firecrawl 抓取后端（需 FIRECRAWL_API_KEY）
 # selenium             # browser 抓取后端（js 渲染，需本机 chrome）
 # browser_cookie3      # browser 后端反爬 cookie 注入

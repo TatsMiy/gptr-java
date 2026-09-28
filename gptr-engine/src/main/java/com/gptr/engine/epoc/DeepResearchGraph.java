@@ -246,7 +246,8 @@ public class DeepResearchGraph {
      *  <p>{@code budgets} 独立传入（不并入 {@link ResearchOptions} 的任一分量组）：它是横跨
           *  全部节点的**代码内常量载体**。 */
     public static CompiledGraph<DeepResearchState> buildReal(
-            GraphDeps deps, SearchOptions searchOptions, ResearchOptions opts, Budgets budgets)
+            GraphDeps deps, SearchOptions searchOptions, ResearchOptions opts, Budgets budgets,
+            String requestId)
             throws Exception {
         // 澄清前奏（初搜原 query → 校准 query），clarifyQuestions=0 时跳过
         AsyncNodeAction<DeepResearchState> plan = null;
@@ -262,7 +263,7 @@ public class DeepResearchGraph {
                 NODE_GENERATE, deps.sink(), null);
         AsyncNodeAction<DeepResearchState> searchNode = observed(
                 AsyncNodeAction.node_async(state -> SearchNode.runSearch(
-                        state, deps.search(), searchOptions, budgets.retrieval())),
+                        state, deps.search(), searchOptions, budgets.retrieval(), requestId)),
                 NODE_SEARCH, deps.sink(),
                 Map.of("chain", deps.search().name()));
         boolean withScrape = opts.scrape().fetchFullPage() && deps.scraper() != null;
@@ -272,7 +273,7 @@ public class DeepResearchGraph {
         AsyncNodeAction<DeepResearchState> scrapeNode = null;
         if (withScrape) {
             ScrapeNode scrape = new ScrapeNode(deps.scraper(), deps.llm(), deps.distillGate(),
-                    deps.costCallback());
+                    deps.costCallback(), requestId);
             scrapeNode = observed(AsyncNodeAction.node_async(state -> scrape.runScrape(state,
                     opts.scrape().quota(), opts.budgets(),
                     opts.scrape().sourceDistill(), opts.scrape().sourceRank())),

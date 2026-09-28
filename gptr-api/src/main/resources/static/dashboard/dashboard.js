@@ -296,6 +296,11 @@ function appendEvent(ev) {
   // 完成后刷新任务头部（成本/状态/按钮态）
   if (ev.type !== "ACTIVITY") loadTask(drawerState.taskId);
   if (drawerState.tab === "report" && ev.type === "SUCCEEDED") loadReport(true);
+  // 体检事件只写一次且偏晚（写作末尾）；停在爬虫页签时不让用户手动刷新
+  if (drawerState.tab === "crawl" && ev.type === "ACTIVITY"
+      && activityPayload(ev.payload).kind === "crawl_health") {
+    renderCrawlTask();
+  }
 }
 
 /* 切语言重渲时间线：从缓存的事件对象重建（不发请求、不丢已收事件） */
@@ -350,8 +355,7 @@ function buildEventRow(ev) {
 
 /* ACTIVITY payload：{kind, label, detail{...}}（telemetry-only，安全解析） */
 function renderActivity(payloadRaw, icon, row, label, sub) {
-  let p = {};
-  try { p = typeof payloadRaw === "string" ? JSON.parse(payloadRaw) : (payloadRaw || {}); } catch (_) { /* ignore */ }
+  const p = activityPayload(payloadRaw);
   const kind = p.kind || "?";
   const d = p.detail || {};
   const name = esc(p.label || "");
@@ -389,6 +393,19 @@ function renderActivity(payloadRaw, icon, row, label, sub) {
     if (d.retried) bits.push(t("act.retried", { n: d.retried }));
     if (d.index !== undefined) bits.push(t("act.sectionIndex", { n: d.index + 1 }));
     sub.textContent = bits.join(" · ");
+  } else if (kind === "crawl_health") {
+    icon.textContent = "🕸️";
+    row.classList.add("ev-scrape");
+    label.textContent = t("act.crawlHealth", {
+      line: t("crawl.funnel", {
+        collected: d.collected, picked: d.picked, returned: d.returned, valid: d.validPages,
+      }),
+    });
+    // 时间线上只放最值钱的那两格：漏斗与"引用未读源"；完整明细在「爬虫」页签
+    sub.textContent = t("crawl.citedUnread", {
+      unread: d.citedFromUnfetched || 0, cited: d.citedUrls || 0,
+      pct: ratioPct(d.citedFromUnfetched || 0, d.citedUrls || 0),
+    });
   } else {
     icon.textContent = "•";
     label.textContent = name
@@ -415,8 +432,166 @@ function switchTab(tab) {
   $("tabTimeline").hidden = tab !== "timeline";
   $("tabEvidence").hidden = tab !== "evidence";
   $("tabReport").hidden = tab !== "report";
+  $("tabCrawl").hidden = tab !== "crawl";
   if (tab === "evidence") loadEvidence();
   if (tab === "report") loadReport(false);
+  if (tab === "crawl") loadCrawlerTab();
+}
+
+/* ---- 爬虫页签：上半 = 爬虫进程窗口（全局），下半 = 本任务抓取体检 ----
+ * 两半的数据来源不同，故意不合并：上半是**爬虫进程内**的计数（重启即清零，
+ * 只代表当前窗口），下半是**本任务落库的体检事件**（历史，跨轮累加）。
+ * 拼在一起会让人以为它们是同一个窗口的数字。 */
+const CRAWLER_API = "/api/v1/crawler/stats";
+
+/* 最近一次成功拉到的计数快照：切语言时从它重渲，不再打一次接口 */
+const crawlState = { stats: null };
+
+function loadCrawlerTab() {
+  renderCrawlTask();
+  renderCrawlGlobal();   // 先用缓存立刻出图：切回页签时不闪空
+  loadCrawlerStats();    // 再拉一次 —— 进程窗口一直在变，缓存只用来兜底
+}
+
+async function loadCrawlerStats() {
+  const warn = $("crawlWarn");
+  $("crawlHint").textContent = t("stage.loading");
+  try {
+    crawlState.stats = await j("GET", CRAWLER_API);
+    warn.hidden = true;
+    $("crawlHint").textContent = "";
+  } catch (e) {
+    // 503 的 body 是 {error, detail}；非 JSON（网络层失败）就用原文
+    let detail = e.message;
+    try {
+      const p = JSON.parse(e.message);
+      detail = p.detail || p.error || detail;
+    } catch (_) { /* 非 JSON：保留原文 */ }
+    crawlState.stats = null;
+    warn.hidden = false;
+    warn.textContent = t("crawl.unreachable", { msg: trunc(detail, 120) });
+    $("crawlHint").textContent = "";
+  }
+  renderCrawlGlobal();
+}
+
+function renderCrawlGlobal() {
+  const host = $("crawlGlobal");
+  host.replaceChildren();
+  const s = crawlState.stats;
+  if (!s) return;   // 加载中或不可达：不可达时有横幅说明，加载中不摆占位
+  const scrape = s.scrape || {};
+  const search = s.search || {};
+  if (!scrape.total) {
+    host.replaceChildren(el("div", "crawl-empty", t("crawl.noData")));
+    return;
+  }
+  host.append(
+    crawlRow(t("crawl.window", { s: s.uptime_s, n: s.workers }),
+      t("crawl.total", { n: scrape.total })),
+    crawlRow(t("crawl.outcome"), crawlPairs(scrape.outcome)),
+    crawlRow(t("crawl.pageKind"), crawlPairs(scrape.page_kind)),
+    crawlRow(t("crawl.statusClass"), crawlPairs(scrape.status_class)),
+    crawlRow(t("crawl.truncated", { n: scrape.truncated || 0 }),
+      t("crawl.nonSite", { list: (scrape.non_site_reasons || []).join(", ") })),
+    crawlRow(t("crawl.latencyLabel"), t("crawl.latency", latencyParams(scrape.latency_ms))),
+    crawlRow(t("crawl.topDomains", { n: (scrape.top_domains || []).length }),
+      (scrape.top_domains || []).map(domainLine).join("  ·  ")),
+    crawlRow(t("crawl.otherDomains", otherDomainsParams(scrape.other_domains)), ""),
+    crawlRow(t("crawl.search") + " " + (search.total || 0),
+      t("crawl.byRetriever") + ": " + retrieverLine(search.by_retriever)),
+    crawlRow(t("crawl.resultsPerQuery"), crawlPairs((search.results_per_query || {}).buckets)),
+    crawlRow(t("crawl.search") + " " + t("crawl.latencyLabel"),
+      t("crawl.latency", latencyParams(search.latency_ms))));
+}
+
+function renderCrawlTask() {
+  const host = $("crawlTask");
+  host.replaceChildren();
+  const p = crawlHealth();
+  if (!p) {
+    host.replaceChildren(el("div", "crawl-empty", t("crawl.noHealth")));
+    return;
+  }
+  const d = p.detail || {};
+  const cited = d.citedUrls || 0;
+  const unread = d.citedFromUnfetched || 0;
+  host.append(
+    crawlRow(t("crawl.funnel", {
+      collected: d.collected, picked: d.picked, returned: d.returned, valid: d.validPages,
+    }), ""),
+    crawlRow(t("crawl.citedUnread", { unread, cited, pct: ratioPct(unread, cited) }), ""),
+    crawlRow(t("crawl.buckets", {
+      silent: d.silentDropped || 0, blocked: d.blockedOrLogin || 0, clean: d.okClean || 0,
+      degraded: d.okDegraded || 0, failed: d.failed || 0,
+    }), ""),
+    crawlRow(t("crawl.failures"), ""));
+  const samples = Array.isArray(d.sampleFailures) ? d.sampleFailures : [];
+  if (!samples.length) {
+    host.append(el("div", "crawl-empty", "—"));
+  }
+  for (const f of samples) {
+    host.append(crawlRow(esc(f.reason || ""), trunc(esc(f.url || ""), 110)));
+  }
+  if (d.failuresOmitted) {
+    host.append(crawlRow("", t("crawl.failuresOmitted", { n: d.failuresOmitted })));
+  }
+}
+
+/* 本任务最近一条抓取体检事件（同一任务可能有多条：重试/续跑各写一次，取最后一条） */
+function crawlHealth() {
+  const hits = drawerState.events.filter(
+    (ev) => ev.type === "ACTIVITY" && activityPayload(ev.payload).kind === "crawl_health");
+  return hits.length ? activityPayload(hits[hits.length - 1].payload) : null;
+}
+
+/* ACTIVITY 的 payload 可能是字符串或对象；解析失败一律当空对象（观测数据不值得炸界面） */
+function activityPayload(raw) {
+  try {
+    return typeof raw === "string" ? JSON.parse(raw) : (raw || {});
+  } catch (_) {
+    return {};
+  }
+}
+
+function ratioPct(part, whole) {
+  return whole > 0 ? Math.round((part / whole) * 100) : 0;
+}
+
+function latencyParams(lat) {
+  const l = lat || {};
+  return { p50: l.p50 || 0, p95: l.p95 || 0, sampled: l.sampled || 0, total: l.total || 0 };
+}
+
+function otherDomainsParams(other) {
+  const o = other || {};
+  return { total: o.total || 0, domains: o.domains || 0, unreadable: o.unreadable || 0 };
+}
+
+function domainLine(row) {
+  const reasons = crawlPairs(row.by_reason);
+  return esc(row.domain) + " " + row.total + (reasons ? " (" + reasons + ")" : "");
+}
+
+function retrieverLine(byRetriever) {
+  return Object.entries(byRetriever || {})
+    .map(([name, classes]) => esc(name) + " " + crawlPairs(classes))
+    .join("  ·  ");
+}
+
+/* 只列非零项并按次数降序：词表里的 0 是给机器看的稳定列，人读时是噪声 */
+function crawlPairs(obj) {
+  return Object.entries(obj || {})
+    .filter(([, n]) => Number(n) > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => esc(k) + "×" + n)
+    .join(" · ");
+}
+
+function crawlRow(label, value) {
+  const row = el("div", "crawl-row");
+  row.append(el("span", "crawl-k", label), el("span", "crawl-v", value));
+  return row;
 }
 
 /* ---- 证据库页签（重快照按需拉取，不进 WS） ---- */
@@ -788,6 +963,9 @@ function rerenderAll() {
   }
   renderStageStrip();
   rerenderTimeline();
+  // 爬虫页签两半都从缓存重渲（crawlState.stats 与事件缓存），不触发任何 load*
+  renderCrawlGlobal();
+  renderCrawlTask();
   if (drawerState.evidence) rerenderEvidence();
   if (drawerState.reportChars !== null && drawerState.task) {
     $("reportHint").textContent = t("rpt.loaded", { n: drawerState.reportChars });
@@ -831,6 +1009,8 @@ function bind() {
   $("dRetry").onclick = doRetry;
   $("reportReload").onclick = () => { drawerState.reportLoaded = false; loadReport(true); };
   $("evReload").onclick = loadEvidence;
+  // 爬虫页签的刷新要重打计数接口（进程窗口在变）；本任务那一半从事件缓存重渲
+  $("crawlReload").onclick = () => { loadCrawlerStats(); renderCrawlTask(); };
   for (const b of document.querySelectorAll(".tab")) {
     b.onclick = () => switchTab(b.dataset.tab);
   }

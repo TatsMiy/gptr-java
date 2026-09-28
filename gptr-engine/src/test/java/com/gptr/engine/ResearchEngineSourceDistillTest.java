@@ -9,6 +9,7 @@ import com.gptr.engine.plan.SubQueryPlanner;
 import com.gptr.engine.search.Searcher;
 import com.gptr.engine.write.ReportWriter;
 import com.gptr.integration.client.LlmClient;
+import com.gptr.integration.client.ScrapeBatch;
 import com.gptr.integration.client.ScraperClient;
 import com.gptr.integration.client.ScrapedContent;
 import com.gptr.integration.client.SearchClient;
@@ -105,14 +106,10 @@ class ResearchEngineSourceDistillTest {
         }
 
         @Override
-        public List<ScrapedContent> scrape(List<String> urls) {
-            return List.of(new ScrapedContent(urls.get(0), "t", LONG_CONTENT));
-        }
-
-        @Override
-        public List<ScrapedContent> scrape(List<String> urls, int maxCharsPerUrl) {
+        public ScrapeBatch scrapeDetailed(List<String> urls, int maxCharsPerUrl, String requestId) {
             seenMaxChars.set(maxCharsPerUrl);
-            return List.of(new ScrapedContent(urls.get(0), "t", LONG_CONTENT));
+            return ScrapeBatch.contentsOnly(
+                    List.of(new ScrapedContent(urls.get(0), "t", LONG_CONTENT)));
         }
     }
 

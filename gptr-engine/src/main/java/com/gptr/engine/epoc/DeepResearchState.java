@@ -100,6 +100,7 @@ public class DeepResearchState extends AgentState {
     // 5. 观测统计
     static final String K_DISTILL_STATS = "distillStats";
     static final String K_CHAIN_STATS = "chainStats";
+    static final String K_SCRAPE_HEALTH = "scrapeHealth";
     static final String K_FETCHED_URLS = "fetchedUrls";
     static final String K_HIT_SOURCES = "hitSources";
     static final String K_CLARIFY_APPLIED = "clarifyApplied";
@@ -202,6 +203,17 @@ public class DeepResearchState extends AgentState {
     /** 链路漏斗累计计数（picked / returned / validPages）。 */
     public Map<String, Object> chainStats() {
         return value(K_CHAIN_STATS, Map.of());
+    }
+
+    /**
+     * 每任务抓取体检（跨轮累计）：分桶计数 + 有上限的失败样本。
+     *
+     * <p>是**快照**而非派生量：失败原因分布只存在于爬虫响应里，无法由其它状态唯一确定
+     * （能由已有状态唯一算出的才叫派生量、才不落库；这里不满足，故必须定格）。
+     * 合并规则见 {@link ScrapeHealth}。
+     */
+    public Map<String, Object> scrapeHealth() {
+        return value(K_SCRAPE_HEALTH, Map.of());
     }
 
     /** 抓取成功页 URL（跨层累计）——链路漏斗"未读来源"差集的基准。 */

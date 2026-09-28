@@ -31,6 +31,8 @@ import com.gptr.engine.write.ReportWriter;
 import com.gptr.engine.write.SectionWriter;
 import com.gptr.integration.client.LlmClient;
 import com.gptr.integration.client.ScrapedContent;
+import com.gptr.integration.client.ScrapeBatch;
+import com.gptr.engine.epoc.ScrapeHealth;
 import com.gptr.integration.client.ScraperClient;
 import com.gptr.integration.client.SearchClient;
 import com.gptr.integration.client.SearchOptions;
@@ -182,6 +184,10 @@ public class ResearchEngineImpl implements ResearchEngine {
     private List<SubQuery> subQueries = List.of();
     private List<SearchResult> sources = List.of();
     private List<ScrapedContent> scrapedPages = List.of(); // flat SCRAPING 产出
+    /** 抓取体检：deep 取自图状态、flat 由本批 outcome 归结（分桶与失败样本）。 */
+    private Map<String, Object> scrapeHealth = Map.of();
+    /** flat：实际送去抓取的 URL 数 —— 体检的 `picked`，与 `[chain]` 的"取名"同源。 */
+    private int flatScrapeAttempted;
     private String summarizedContext = "";                  // flat SUMMARIZING 产出
     private List<String> deepLearnings = List.of();         // RESEARCH 阶段图产出
     private List<String> deepSourceUrls = List.of();         // RESEARCH 真实检索 URL（授权来源）
@@ -364,7 +370,9 @@ public class ResearchEngineImpl implements ResearchEngine {
                                     planReflect)),
                                         // 预算载体：代码内常量
                     // ——独立传入，不并入 ResearchOptions；本批只接线检索域
-                    Budgets.defaults());
+                    Budgets.defaults(),
+                    // 关联 id：随抓取/检索请求发给 crawler，使两侧日志按同一 id 对上
+                    task.getId().toString());
             RunnableConfig config = RunnableConfig.builder()
                     .threadId(task.getId().toString()).build();
             DeepResearchState state = graph.invoke(
@@ -380,6 +388,8 @@ public class ResearchEngineImpl implements ResearchEngine {
             deepChainPicked = state.chainStat("picked");
             deepChainReturned = state.chainStat("returned");
             deepChainValidPages = state.chainStat("validPages");
+            // 抓取体检（跨轮累计）随图状态带出；deep 路径的每轮增量由 ScrapeNode 合并进状态。
+            scrapeHealth = state.scrapeHealth();
             deepResearchState = state.researchState();                     // 中央研究状态（outline 输入）
             // 研究零产出（检索/解析全失败被守卫提前 END）→ 显式失败而非
             // 让 WRITING 基于空/编造内容"成功"
@@ -410,7 +420,7 @@ public class ResearchEngineImpl implements ResearchEngine {
     private StageResult searchPayload() {
         // 编排结果带实际命中源集（每子查询成功响应 sourceUsed 去重）
         Searcher.SearchOutcome outcome =
-                searcher.searchAll(subQueries, searchOptions);
+                searcher.searchAll(subQueries, searchOptions, task.getId().toString());
         sources = outcome.results();
         // 检索成功但零结果（如反爬空页）→ 显式失败（可重试），防空上下文编造
         if (sources.isEmpty()) {
@@ -454,10 +464,13 @@ public class ResearchEngineImpl implements ResearchEngine {
                 sources.stream().map(SearchResult::url).toList()));
         List<String> targets = urls.size() > maxScrapeUrls ? urls.subList(0, maxScrapeUrls) : urls;
         boolean distill = sourceDistill;
+        String taskRequestId = task.getId().toString();
         try {
-            scrapedPages = distill
-                    ? scraperClient.scrape(targets, distillMaxChars)
-                    : scraperClient.scrape(targets);
+            ScrapeBatch batch = scraperClient.scrapeDetailed(
+                    targets, distill ? distillMaxChars : 0, taskRequestId);
+            scrapedPages = batch.contents();
+            scrapeHealth = ScrapeHealth.tally(batch.outcomes());
+            flatScrapeAttempted = targets.size();
         } catch (Exception e) {
             scrapedPages = List.of();
             return notePayload(TaskStage.SCRAPING, "scrape failed: " + e.getMessage());
@@ -689,6 +702,10 @@ public class ResearchEngineImpl implements ResearchEngine {
         } else {
             report = reportWriter.write(query, context, sourceUrls);
         }
+        // 引用核验取数：逐节路径读编号前的节原文——终稿正文链接已折叠为 [n]，URL 全在
+        // 参考文献表里，直接数终稿会把"越权引用"和"引证次数"一起数成 0。单遍路径未编号，
+        // 直接数全文。
+        String citationText = sectionResult != null ? sectionResult.verificationText() : report;
         ObjectNode payload = mapper.createObjectNode();
         payload.put("stage", "WRITING");
         payload.put("reportChars", report.length());
@@ -706,12 +723,14 @@ public class ResearchEngineImpl implements ResearchEngine {
 
         // 幻觉引用核验——正文引用的 URL 必须 ∈ 授权来源（报告级全局闸）
         CitationVerifier verifier = new CitationVerifier(sourceUrls);
-        List<String> cited = verifier.citedUrls(report);
-        List<String> verified = verifier.verify(report);
+        List<String> cited = verifier.citedUrls(citationText);
+        List<String> verified = verifier.verify(citationText);
         payload.put("citedUrls", cited.size());
         payload.put("verifiedCitations", verified.size());
         payload.put("unauthorizedCitations", cited.size() - verified.size());
-        logChainFunnel(payload);
+        logChainFunnel(payload, citationText);
+        // 与 [chain] 分开调用：漏斗在正文为空时无事可报，而抓取体检恰恰在那种任务上最该留痕
+        emitCrawlHealth(citationText);
         return new StageResult(TaskStage.WRITING, payload.toString(), llmClient.lastCallCostUsd());
     }
 
@@ -720,17 +739,20 @@ public class ResearchEngineImpl implements ResearchEngine {
      *
      * <p>来源行回答"<b>检索到了但没抓</b>"；事实行回答"<b>抓到了但没用上</b>"。
      * 每段数字都有独立采集点（检索=collectedUrls、取名/抓成=图内 chainStats、note=evidenceBank、
-     * 引用=报告全文），故可逐段对账；过程细节仍看 [batch2]/[diag] 日志，两者不重复。
+     * 引用=编号前的报告正文），故可逐段对账；过程细节仍看 [batch2]/[diag] 日志，两者不重复。
+     *
+     * <p>{@code citationText} 传编号前的正文：编号化终稿的 URL 集中在参考文献表，
+     * 拿它统计会把"引用 N 源/M 次"压成 N/N。
      *
      * <p><b>未读来源</b> = note 的 sourceUrl 集（canonical）− 抓取成功页集（canonical）。
      * 大于 0 说明有 note 把内容归因到了<b>从未成功抓取</b>的页面——extract 阶段的授权校验
      * 只要求 URL ∈ 检索集（collectedUrls）、不要求抓过，故该缺口真实存在（正确性问题，非效率问题）。
      */
-    private void logChainFunnel(ObjectNode payload) {
-        if (report == null || report.isBlank()) {
+    private void logChainFunnel(ObjectNode payload, String citationText) {
+        if (citationText == null || citationText.isBlank()) {
             return;
         }
-        CitationVerifier.CitationStats cs = CitationVerifier.citationStats(report);
+        CitationVerifier.CitationStats cs = CitationVerifier.citationStats(citationText);
         if (deepResearch) {
             Set<String> noteSources = canonicalNoteSources(deepEvidenceBank);
             Set<String> unread = unreadNoteSources(noteSources, canonicalSet(deepFetchedUrls));
@@ -758,6 +780,61 @@ public class ResearchEngineImpl implements ResearchEngine {
                     summarizedContext == null ? 0 : summarizedContext.length(),
                     cs.distinctCanonical(), cs.total());
         }
+    }
+
+    /**
+     * 每任务"抓取体检"：把抓取期的逐 URL 交代汇总 + 本阶段的引用事实，并成一条 ACTIVITY 事件。
+     *
+     * <p><b>与 {@code [chain]} 分开调用</b>：漏斗在正文为空时提前返回（无事可报），而体检要的
+     * 是"这一轮抓取到底发生了什么"——正文写没写出来与它无关，故调用点必须独立。
+     *
+     * <p><b>为什么在写作末尾发</b>：{@code citedFromUnfetched}（报告引用集 − 抓取成功集）要等报告
+     * 产出才算得出，而它正是"抓取质量直接影响报告可信度"的那一格。
+     *
+     * <p><b>事件里没有 `degraded`</b>：它的输入（本事件里的几个计数）足以唯一算出 ⇒ 按"不存能算的"
+     * 不落库；本仓也不预设档位规则，只呈现计数与比值 —— 判断留在读方，
+     * 免得同一套规则在引擎与界面各存一份、各自漂移。
+     *
+     * <p>数字与 {@code [chain]} 同源（同一处的字段），故两处可逐项对账，不另立口径。
+     */
+    private void emitCrawlHealth(String citationText) {
+        int collected;
+        int picked;
+        int returned;
+        int validPages;
+        Set<String> fetchedCanonical;
+        if (deepResearch) {
+            collected = deepSourceUrls.size();
+            picked = deepChainPicked;
+            returned = deepFetchedUrls.size();
+            validPages = deepChainValidPages;
+            fetchedCanonical = canonicalSet(deepFetchedUrls);
+        } else {
+            collected = sources.size();
+            picked = flatScrapeAttempted;
+            returned = scrapedPages.size();
+            validPages = scrapedPages.size();
+            fetchedCanonical = canonicalSet(scrapedPages.stream().map(ScrapedContent::url).toList());
+        }
+        Set<String> cited = CitationVerifier.citedCanonical(citationText);
+        Set<String> citedFromUnfetched = new TreeSet<>(cited);
+        citedFromUnfetched.removeAll(fetchedCanonical);
+
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("collected", collected);
+        detail.put("picked", picked);
+        detail.put("returned", returned);
+        detail.put("validPages", validPages);
+        for (String bucket : List.of(ScrapeHealth.OK_CLEAN, ScrapeHealth.OK_DEGRADED,
+                ScrapeHealth.BLOCKED_OR_LOGIN, ScrapeHealth.SILENT_DROPPED, ScrapeHealth.FAILED,
+                ScrapeHealth.TRUNCATED)) {
+            detail.put(bucket, ScrapeHealth.count(scrapeHealth, bucket));
+        }
+        detail.put("citedUrls", cited.size());
+        detail.put("citedFromUnfetched", citedFromUnfetched.size());
+        detail.put("sampleFailures", ScrapeHealth.samples(scrapeHealth));
+        detail.put("failuresOmitted", ScrapeHealth.failuresOmitted(scrapeHealth));
+        activity(TaskStage.WRITING, "crawl_health", "scrape", detail);
     }
 
     /**
@@ -848,8 +925,9 @@ public class ResearchEngineImpl implements ResearchEngine {
             String takeaways = writeTakeaways(
                     buildSectionPreview(groups.sections(), written.markdowns()));
             String merged = sectionWriter.merge(outline.title(), written.markdowns(), takeaways);
-            return new SectionWriter.WriteResult(merged, groups.sections().size(),
-                    written.unauthorizedTotal(), written.retried(), groups.fallbackNotes().size());
+            return new SectionWriter.WriteResult(merged, String.join("\n\n", written.markdowns()),
+                    groups.sections().size(), written.unauthorizedTotal(), written.retried(),
+                    groups.fallbackNotes().size());
         } catch (Exception e) {
             return null; // 逐节路径任何异常 → 回退单遍（不中断任务）
         }

@@ -1,5 +1,5 @@
 """请求/响应 DTO（Pydantic）。"""
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
@@ -18,6 +18,9 @@ class SearchResultItem(BaseModel):
 
 class SearchResponse(BaseModel):
     results: List[SearchResultItem]
+    # 检索过程事实（retriever/耗时/原始条数/去重后条数/无 url 被丢弃条数）。
+    # 每元素字段见 api.py 的 _search_diagnostics；调用方不消费也可忽略。
+    diagnostics: Optional[Dict[str, Any]] = None
 
 
 class ScrapeRequest(BaseModel):
@@ -34,4 +37,9 @@ class ScrapedContent(BaseModel):
 
 
 class ScrapeResponse(BaseModel):
+    # 可用正文列表：语义与字段名保持不变，旧调用方无需改动。
     contents: List[ScrapedContent]
+    # 逐 URL 结果与原因（含未进入 contents 的那些）。字段由
+    # pycrawler.scraper.outcome.ScrapeOutcome 定义，此处只声明为 JSON 对象，
+    # 以免同一份字段清单出现两处声明。
+    outcomes: List[Dict[str, Any]] = []

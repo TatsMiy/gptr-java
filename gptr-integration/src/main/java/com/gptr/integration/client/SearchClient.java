@@ -24,4 +24,12 @@ public interface SearchClient {
     default SearchResponse search(String query, SearchOptions opts) {
         return search(query);
     }
+
+    /**
+     * 带选项与调用方关联 id 执行搜索。关联 id 供后端把日志与任务对上；
+     * 默认实现忽略它并转发 {@link #search(String, SearchOptions)}。
+     */
+    default SearchResponse search(String query, SearchOptions opts, String requestId) {
+        return search(query, opts);
+    }
 }

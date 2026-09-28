@@ -114,12 +114,37 @@ class SectionWriterTest {
         String merged = writer.merge("标题", mds, "- 要点1");
         assertTrue(merged.startsWith("# 标题"), "标题在首");
         assertTrue(merged.contains("- 要点1"), "takeaways 在场");
-        int refCount = countOccurrences(merged, "- [");
-        assertEquals(2, refCount, "References 机械去重（a.com/doc 与 b.com 各一次）: " + merged);
         int refSection = merged.indexOf("## References");
         assertTrue(refSection > merged.indexOf("## 乙"), "References 在正文后");
-        assertTrue(merged.substring(refSection).contains("https://a.com/doc"));
-        assertTrue(merged.substring(refSection).contains("https://b.com"));
+        String body = merged.substring(0, refSection);
+        assertFalse(body.contains("https://"), "正文不得残留 URL: " + body);
+        assertTrue(body.contains("论断甲 [1](#ref-1) 与 [2](#ref-2) 引用。"),
+                "写作模板的外层括号随链接一起折叠: " + body);
+        assertTrue(body.contains("再次引用 [1](#ref-1) 同一链接。"),
+                "跨节同一 URL 复用编号: " + body);
+        String refs = merged.substring(refSection);
+        assertEquals(2, countOccurrences(refs, "<a id=\"ref-"), "参考文献两条: " + refs);
+        assertTrue(refs.contains("[源A](https://a.com/doc)"), "条目 1 保留来源链接: " + refs);
+        assertTrue(refs.contains("[源B](https://b.com)"), "条目 2 保留来源链接: " + refs);
+    }
+
+    @Test
+    void numberedCitationWithoutSurroundingParens() {
+        var writer = new SectionWriter(null, 6000, false);
+        String merged = writer.merge("标题",
+                List.of("## 甲\n\n论断 [来源](https://a.com) 成立。\n\n"), "");
+        String body = merged.substring(0, merged.indexOf("## References"));
+        assertTrue(body.contains("论断 [1](#ref-1) 成立。"),
+                "无外层括号时只替换链接本体: " + body);
+        assertTrue(merged.contains("1. <a id=\"ref-1\"></a>[来源](https://a.com)"),
+                "参考文献条目带可跳转锚点: " + merged);
+    }
+
+    @Test
+    void noLinkMeansNoReferencesSection() {
+        var writer = new SectionWriter(null, 6000, false);
+        String merged = writer.merge("标题", List.of("## 甲\n\n无引用的论断。\n\n"), "- 要点");
+        assertFalse(merged.contains("## References"), "无链接不得追加空参考文献表: " + merged);
     }
 
     @Test
@@ -134,7 +159,7 @@ class SectionWriterTest {
     }
 
     // ------------------------------------------------------------------
-    // 括号 URL 不再被 References 机械生成截断
+    // 括号 URL 不再被参考文献生成截断
     // ------------------------------------------------------------------
 
     @Test
@@ -155,9 +180,11 @@ class SectionWriterTest {
         String md = "## 甲\n\nTransformer 架构演进见 ([条目]"
                 + "(https://en.wikipedia.org/wiki/Transformer_(deep_learning)))。\n\n";
         String merged = writer.merge("标题", List.of(md), "- 要点");
+        String body = merged.substring(0, merged.indexOf("## References"));
+        assertTrue(body.contains("见 [1](#ref-1)。"), "括号 URL 折叠为编号: " + body);
         String refs = merged.substring(merged.indexOf("## References"));
         assertTrue(refs.contains("https://en.wikipedia.org/wiki/Transformer_(deep_learning)"),
-                "References 必须保留 URL 完整括号: " + refs);
+                "参考文献必须保留 URL 完整括号: " + refs);
         assertFalse(refs.contains("Transformer_(deep_learning)）"),
                 "不得出现括号被截断的畸形串");
     }

@@ -76,6 +76,15 @@ public class PythonCrawlerSearchClient implements SearchClient {
 
     @Override
     public SearchResponse search(String query, SearchOptions opts) {
+        return search(query, opts, "");
+    }
+
+    /**
+     * 带关联 id 的检索：id 以 {@link HttpDefaults#REQUEST_ID_HEADER} 发给后端，
+     * 使后端日志与任务日志能按同一 id 对上（空值 = 不带该头）。
+     */
+    @Override
+    public SearchResponse search(String query, SearchOptions opts, String requestId) {
         SearchOptions effective = (opts == null ? SearchOptions.DEFAULT : opts)
                 .withDefaults(new SearchOptions(defaultRetriever, defaultMaxResults));
         try {
@@ -95,6 +104,9 @@ public class PythonCrawlerSearchClient implements SearchClient {
             }
             if (RetrieverKeyNames.GOOGLE.equals(retriever) && retrieverKeys.googleCxKey() != null) {
                 builder.header(RetrieverKeyNames.googleCxHeader(), retrieverKeys.googleCxKey());
+            }
+            if (requestId != null && !requestId.isBlank()) {
+                builder.header(HttpDefaults.REQUEST_ID_HEADER, requestId);
             }
             HttpRequest request = builder
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))

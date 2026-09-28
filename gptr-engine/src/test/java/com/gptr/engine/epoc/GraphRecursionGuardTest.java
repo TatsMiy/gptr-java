@@ -3,6 +3,7 @@ package com.gptr.engine.epoc;
 import com.gptr.engine.EffectiveBudgets;
 import com.gptr.engine.budget.Budgets;
 import com.gptr.integration.client.LlmClient;
+import com.gptr.integration.client.ScrapeBatch;
 import com.gptr.integration.client.ScraperClient;
 import com.gptr.integration.client.ScrapedContent;
 import com.gptr.integration.client.SearchClient;
@@ -100,9 +101,10 @@ class GraphRecursionGuardTest {
         }
 
         @Override
-        public List<ScrapedContent> scrape(List<String> urls) {
+        public ScrapeBatch scrapeDetailed(List<String> urls, int maxCharsPerUrl, String requestId) {
             calls++;
-            return List.of(new ScrapedContent(urls.get(0), "t", "full content of page"));
+            return ScrapeBatch.contentsOnly(
+                    List.of(new ScrapedContent(urls.get(0), "t", "full content of page")));
         }
     }
 
@@ -123,7 +125,8 @@ class GraphRecursionGuardTest {
                         new DeepResearchGraph.ExtractOptions(true, true),
                         new DeepResearchGraph.CurateOptions(false, 10),
                         new DeepResearchGraph.FollowUpOptions(followUpDriven, decay, false)),
-                Budgets.defaults());
+                Budgets.defaults(),
+                "test-request-id");
     }
 
     @Test

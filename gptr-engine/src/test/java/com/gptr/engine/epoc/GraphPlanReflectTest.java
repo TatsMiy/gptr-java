@@ -99,7 +99,8 @@ class GraphPlanReflectTest {
                         new DeepResearchGraph.ExtractOptions(true, true),
                         new DeepResearchGraph.CurateOptions(false, 10),
                         new DeepResearchGraph.FollowUpOptions(true, 0.5, planReflect)),
-                Budgets.defaults());
+                Budgets.defaults(),
+                "test-request-id");
     }
 
     @Test

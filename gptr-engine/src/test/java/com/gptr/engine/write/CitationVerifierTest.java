@@ -156,4 +156,64 @@ class CitationVerifierTest {
         CitationVerifier verifier = new CitationVerifier(List.of("https://example.com/?q=hello!"));
         assertFalse(verifier.hasUnauthorizedCitations("见[页](https://example.com/?q=hello!)。"));
     }
+
+    // ------------------------------------------------------------------
+    // 参考文献段切分与编号表反解
+    // ------------------------------------------------------------------
+
+    @Test
+    void splitReferencesTakesLastHeading() {
+        CitationVerifier.Split none = CitationVerifier.splitReferences("正文没有来源段");
+        assertEquals("正文没有来源段", none.body());
+        assertEquals("", none.references());
+
+        CitationVerifier.Split s = CitationVerifier.splitReferences(
+                "# 标题\n\n正文。\n\n## References\n\n1. [甲](https://a.com)\n");
+        assertTrue(s.body().startsWith("# 标题"), "body 到参考文献标题为止: " + s.body());
+        assertFalse(s.body().contains("https://"), "body 不得含来源段内容");
+        assertTrue(s.references().contains("https://a.com"));
+
+        // 正文里出现同名小标题时，取最后一个（真正的来源段在文末）
+        CitationVerifier.Split twice = CitationVerifier.splitReferences(
+                "## References\n\n讨论段。\n\n## References\n\n1. [甲](https://a.com)\n");
+        assertTrue(twice.body().contains("讨论段"), "最后一个标题之前的都算正文");
+    }
+
+    @Test
+    void referenceIndexParsesNumberedEntries() {
+        String refs = "## References\n\n"
+                + "1. <a id=\"ref-1\"></a>[甲](https://a.com/x)\n"
+                + "2. <a id=\"ref-2\"></a>[乙](https://b.com/y)\n"
+                + "3. 没有链接的坏行\n"
+                + "4. [丙](https://c.com/z)\n";
+        var index = CitationVerifier.referenceIndex(refs);
+        assertEquals(3, index.size(), "坏行跳过: " + index);
+        assertEquals("https://a.com/x", index.get(1));
+        assertEquals("https://b.com/y", index.get(2));
+        assertEquals("https://c.com/z", index.get(4));
+        assertFalse(index.containsKey(3), "无链接的条目不入表");
+        assertTrue(CitationVerifier.referenceIndex(null).isEmpty());
+    }
+
+    @Test
+    void referenceIndexKeepsFirstOnDuplicateNumber() {
+        String refs = "## References\n\n1. [甲](https://a.com)\n1. [乙](https://b.com)\n";
+        assertEquals("https://a.com", CitationVerifier.referenceIndex(refs).get(1));
+    }
+
+    @Test
+    void referenceEntriesKeepDescriptionDropsTerminalUrl() {
+        // 编号化产物形态：锚点 + 正文 label
+        String numbered = "## References\n\n1. <a id=\"ref-1\"></a>[CSDN](https://a.com/x)\n";
+        assertEquals("CSDN", CitationVerifier.referenceEntries(numbered).get("https://a.com/x"));
+
+        // 学术式条目：尾部“以 URL 当 label”的链接整条删除，正文描述保留
+        String academic = "## References\n\n"
+                + "1. Zhao, Y., Yuan, B. (2026). AMA-Bench: A Benchmark. arXiv. "
+                + "[https://arxiv.org/abs/2602.22769](https://arxiv.org/abs/2602.22769)\n";
+        String label = CitationVerifier.referenceEntries(academic)
+                .get("https://arxiv.org/abs/2602.22769");
+        assertTrue(label.contains("AMA-Bench"), "描述文字保留: " + label);
+        assertFalse(label.contains("https://"), "尾部 URL 必须去掉: " + label);
+    }
 }

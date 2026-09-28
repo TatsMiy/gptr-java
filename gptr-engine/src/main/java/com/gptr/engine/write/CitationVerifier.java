@@ -4,9 +4,13 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 引用核验器（URL 规范化后比对授权来源）：报告中的引用 URL
@@ -76,6 +80,147 @@ public class CitationVerifier {
 
     /** 引用统计：total=引证次数；两个源数见 {@link #citationStats}。 */
     public record CitationStats(int total, int distinctRaw, int distinctCanonical) {
+    }
+
+    /**
+     * 报告引用到的来源集（canonical，去重）。
+     *
+     * <p>{@link #citationStats} 只给计数，而"引用了**没抓过**的页面"这类判断需要集合差
+     * （引用集 − 已抓集）—— 计数减不出来。故单独给出集合，复用同一套 canonical 归并规则，
+     * 避免下游各写一份"看起来差不多"的归一化。
+     */
+    public static Set<String> citedCanonical(String report) {
+        if (report == null || report.isBlank()) {
+            return Set.of();
+        }
+        Set<String> canonical = new LinkedHashSet<>();
+        for (String u : extractUrls(report, false)) {
+            String c = canonicalize(u);
+            canonical.add(c == null ? u : c);
+        }
+        return canonical;
+    }
+
+    /** 报告切分：body 正文 / references 参考文献段（无该段则整篇为 body）。 */
+    public record Split(String body, String references) {
+    }
+
+    /** 参考文献段标题：`##`–`######` + 中英文常见写法。 */
+    private static final Pattern REF_HEADING = Pattern.compile(
+            "(?im)^\\s*#{2,6}\\s*(References|参考文献|参考资料|Sources|来源|参考来源)\\s*$");
+
+    /** 编号条目行首：{@code 1.} / {@code 12.} 后跟空白。 */
+    private static final Pattern REF_ENTRY = Pattern.compile("^\\s*(\\d{1,3})\\.\\s");
+
+    /**
+     * 切出参考文献段：取<b>最后一个</b>匹配的标题（容忍正文里出现同名小标题）。
+     */
+    public static Split splitReferences(String report) {
+        if (report == null || report.isBlank()) {
+            return new Split("", "");
+        }
+        Matcher m = REF_HEADING.matcher(report);
+        int idx = -1;
+        while (m.find()) {
+            idx = m.start();
+        }
+        if (idx < 0) {
+            return new Split(report, "");
+        }
+        return new Split(report.substring(0, idx), report.substring(idx));
+    }
+
+    /**
+     * 解析参考文献段的编号表（编号 → URL），供把正文 {@code [n]} 反解回来源。
+     *
+     * <p>只认形如 {@code 1. [label](https://…)} 的条目行（行首十进制编号 + 该行内
+     * 首个 markdown 链接或裸 URL）；解析不出的行<b>跳过</b>——不猜、不按位置凑。
+     * 同编号重复出现时保留首次。
+     */
+    public static Map<Integer, String> referenceIndex(String referencesSection) {
+        Map<Integer, String> out = new LinkedHashMap<>();
+        if (referencesSection == null || referencesSection.isBlank()) {
+            return out;
+        }
+        for (String line : referencesSection.split("\\R")) {
+            Matcher head = REF_ENTRY.matcher(line);
+            if (!head.find()) {
+                continue;
+            }
+            int number = Integer.parseInt(head.group(1));
+            String url = firstUrl(line.substring(head.end()));
+            if (url != null && !out.containsKey(number)) {
+                out.put(number, url);
+            }
+        }
+        return out;
+    }
+
+    /** 行内首个 markdown 链接 URL；无链接则退化为首个裸 http(s) URL。 */
+    private static String firstUrl(String line) {
+        List<LinkSpan> links = scanMarkdownLinks(line);
+        if (!links.isEmpty()) {
+            return links.get(0).url();
+        }
+        for (String u : extractUrls(line)) {
+            return u;
+        }
+        return null;
+    }
+
+    /**
+     * 参考文献段的条目描述（canonical URL → 条目文本）。
+     *
+     * <p>文本 = 该行去掉行首编号、锚点标签与来源写法之后的剩余部分：
+     * 尾部"以 URL 当 label"的链接整条删除，其余链接只保留 label 文字。
+     *
+     * <p>用途：编号化<b>重建</b>参考文献表时优先沿用原条目的描述——模型自己写的条目常带
+     * 作者/年份/标题，而正文里的行内 label 往往只是一个域名；只取正文 label 会把这些元数据丢掉。
+     */
+    public static Map<String, String> referenceEntries(String referencesSection) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (referencesSection == null || referencesSection.isBlank()) {
+            return out;
+        }
+        for (String line : referencesSection.split("\\R")) {
+            Matcher head = REF_ENTRY.matcher(line);
+            if (!head.find()) {
+                continue;
+            }
+            String rest = line.substring(head.end()).trim();
+            List<LinkSpan> links = scanMarkdownLinks(rest);
+            String url;
+            if (!links.isEmpty()) {
+                url = links.get(0).url();
+                StringBuilder sb = new StringBuilder(rest);
+                for (int i = links.size() - 1; i >= 0; i--) {
+                    LinkSpan span = links.get(i);
+                    boolean labelIsUrl = span.label().regionMatches(true, 0, "https://", 0, 8)
+                            || span.label().regionMatches(true, 0, "http://", 0, 7);
+                    sb.replace(span.start(), span.end(), labelIsUrl ? "" : span.label());
+                }
+                rest = sb.toString();
+            } else {
+                List<String> bare = extractUrls(rest);
+                if (bare.isEmpty()) {
+                    continue;
+                }
+                url = bare.get(0);
+                for (String u : bare) {
+                    rest = rest.replace(u, "");
+                }
+            }
+            String canonical = canonicalize(url);
+            if (canonical == null) {
+                continue;
+            }
+            String label = rest.replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim();
+            label = label.replaceAll("[\\s.。;；,，]+$", "");
+            if (!label.isEmpty()) {
+                out.putIfAbsent(canonical, label);
+            }
+        }
+        return out;
     }
 
     /** 核验：返回授权来源 ∩ 报告引用（canonical 匹配；返回报告原文，保序）。 */
@@ -415,6 +560,79 @@ public class CitationVerifier {
             end--;
         }
         return url.substring(0, end);
+    }
+
+    /** 正文中一个 markdown 链接的位置：{@code [start, end)} 为可替换区间（含闭合括号）。 */
+    record LinkSpan(int start, int end, String label, String url) {
+    }
+
+    /**
+     * 定位文本里全部 markdown 链接 {@code [label](url)}（仅收 http(s)），带可替换区间。
+     *
+     * <p>URL 段括号配对：URL 内含 {@code (deep_learning)} 时其 {@code )} 属 URL；
+     * 配平后的第一个未配对 {@code )} 才是链接闭合；终止字符 = 空白/引号/反引号/{@code ]}/{@code >}。
+     *
+     * <p>终止字符集比 {@link #isUrlTerminator}（裸 URL 用）<b>更窄</b>：不含逗号与中文句读
+     * ——URL 里的 {@code ,} 是合法 path 字符，而 markdown 链接的闭合由括号配平决定。
+     *
+     * <p>本方法是全仓<b>唯一</b>的 markdown 链接扫描器——编号化与参考文献解析共用它；
+     * 各持一份"同构"实现是畸形 URL 的温床。
+     */
+    static List<LinkSpan> scanMarkdownLinks(String text) {
+        List<LinkSpan> out = new ArrayList<>();
+        if (text == null || text.isBlank()) {
+            return out;
+        }
+        int n = text.length();
+        for (int i = 0; i < n; ) {
+            if (text.charAt(i) != '[') {
+                i++;
+                continue;
+            }
+            int close = text.indexOf(']', i + 1);
+            if (close < 0 || close + 1 >= n || text.charAt(close + 1) != '(') {
+                i++;
+                continue;
+            }
+            String label = text.substring(i + 1, close).trim();
+            int j = scanLinkUrlEnd(text, close + 2);
+            String url = text.substring(close + 2, j).trim();
+            boolean http = url.regionMatches(true, 0, "https://", 0, 8)
+                    || url.regionMatches(true, 0, "http://", 0, 7);
+            if (!label.isEmpty() && http) {
+                out.add(new LinkSpan(i, j + 1, label, url));
+            }
+            i = Math.max(j + 1, i + 1);
+        }
+        return out;
+    }
+
+    /** 从 start 扫到 markdown 链接的 URL 段结束位置（括号配平；遇 {@link #isLinkUrlTerminator} 停）。 */
+    private static int scanLinkUrlEnd(String text, int start) {
+        int n = text.length();
+        int j = start;
+        int open = 0;
+        while (j < n) {
+            char c = text.charAt(j);
+            if (c == '(') {
+                open++;
+            } else if (c == ')') {
+                if (open == 0) {
+                    break; // markdown 链接闭合
+                }
+                open--;
+            } else if (isLinkUrlTerminator(c)) {
+                break;
+            }
+            j++;
+        }
+        return j;
+    }
+
+    /** markdown 链接 URL 终止字符（空白/引号/反引号/{@code ]}/{@code >}）。 */
+    private static boolean isLinkUrlTerminator(char c) {
+        return c == ']' || c == '>' || c == '"' || c == '\'' || c == '`'
+                || Character.isWhitespace(c);
     }
 
     /**

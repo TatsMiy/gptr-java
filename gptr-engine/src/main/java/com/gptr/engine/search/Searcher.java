@@ -51,6 +51,11 @@ public class Searcher {
 
     /** 并行检索全部子查询（透传引擎/结果数选项）。 */
     public SearchOutcome searchAll(List<SubQuery> queries, SearchOptions options) {
+        return searchAll(queries, options, "");
+    }
+
+    /** 并行检索全部子查询（透传引擎/结果数选项与调用方关联 id）。 */
+    public SearchOutcome searchAll(List<SubQuery> queries, SearchOptions options, String requestId) {
         SearchOptions opts = options == null ? SearchOptions.DEFAULT : options;
         Set<String> failureCauses = new LinkedHashSet<>(); // 根因摘要（诊断黑盒修复）
         Set<String> hitSources = new LinkedHashSet<>();
@@ -59,7 +64,7 @@ public class Searcher {
             List<CompletableFuture<Optional<SearchResponse>>> futures = new ArrayList<>(queries.size());
             for (SubQuery subQuery : queries) {
                 futures.add(CompletableFuture.supplyAsync(
-                        () -> searchOne(subQuery, opts, failureCauses), pool));
+                        () -> searchOne(subQuery, opts, failureCauses, requestId), pool));
             }
             Map<String, SearchResult> dedup = new LinkedHashMap<>();
             int succeeded = 0;
@@ -94,9 +99,9 @@ public class Searcher {
      *  根因按"最多 {@value #MAX_FAILURE_CAUSES} 条、取异常链最内层消息首
      *  {@value #FAILURE_CAUSE_MAX_CHARS} 字符"去重收集，供全败时的诊断信息。 */
     private Optional<SearchResponse> searchOne(SubQuery subQuery, SearchOptions opts,
-                                               Set<String> failureCauses) {
+                                               Set<String> failureCauses, String requestId) {
         try {
-            return Optional.ofNullable(searchClient.search(subQuery.query(), opts));
+            return Optional.ofNullable(searchClient.search(subQuery.query(), opts, requestId));
         } catch (Exception e) {
             synchronized (failureCauses) {
                 // 取异常链根因第一行（去重），供失败诊断

@@ -134,6 +134,9 @@ public final class BenchmarkMain {
         Map<String, double[]> directStaleBuckets = new LinkedHashMap<>();
         double d1Sum = 0;
         int d1Count = 0;
+        int uncitedRefsSum = 0;
+        int danglingSum = 0;
+        int danglingItems = 0;
         int hallClaims = 0;
         int hallUnsupported = 0;
         int hallInconclusive = 0;
@@ -209,6 +212,11 @@ public final class BenchmarkMain {
             if (row.has("citationConsistency") && row.path("inTextCitations").asInt(0) > 0) {
                 d1Sum += row.path("citationConsistency").asDouble();
                 d1Count++;
+            }
+            uncitedRefsSum += row.path("uncitedRefs").asInt(0);
+            danglingSum += row.path("danglingCitations").asInt(0);
+            if (row.path("danglingCitations").asInt(0) > 0) {
+                danglingItems++;
             }
             if (row.path("leak").asBoolean(false)) {
                 leakItems++;
@@ -287,6 +295,11 @@ public final class BenchmarkMain {
         metrics.put("judgeTokens", totalJudgeTokensRef[0]);
         metrics.put("avgCitationConsistency",
                 round(d1Count == 0 ? Double.NaN : d1Sum / d1Count));
+        // D1 的两个方向各自成数：dangling = 正文引用了表外编号的题数；
+        // uncitedRefs = 各题"参考文献从未被正文引用"条数之和（凑数/灌水信号）。
+        metrics.put("danglingItems", danglingItems);
+        metrics.put("danglingCitations", danglingSum);
+        metrics.put("uncitedRefs", uncitedRefsSum);
 
         ArrayNode acc = metrics.putArray("accuracyBy");
         writeBuckets(acc, accBuckets);
@@ -428,10 +441,11 @@ public final class BenchmarkMain {
         }
         row.put("status", "SUCCEEDED");
 
-        // D1 引用一致性（零 LLM）
+        // D1 引用一致性（零 LLM）：consistency 量编号闭环，uncitedRefs 量表内多余条目
         CitationConsistency.Result d1 = CitationConsistency.calculate(r.report());
         row.put("inTextCitations", d1.inTextCitations());
-        row.put("unreferencedInText", d1.unreferencedInText());
+        row.put("danglingCitations", d1.dangling());
+        row.put("uncitedRefs", d1.uncitedRefs());
         row.put("citationConsistency", round(d1.consistency()));
 
         // 泄漏检测（Bench II）——报告文本出现 blocked 条目（URL 前缀/域名即命中；

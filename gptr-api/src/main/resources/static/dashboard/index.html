@@ -100,6 +100,7 @@
     <button class="tab active" data-tab="timeline" data-i18n="tab.timeline">时间线</button>
     <button class="tab" data-tab="evidence" data-i18n="tab.evidence">证据库</button>
     <button class="tab" data-tab="report" data-i18n="tab.report">报告</button>
+    <button class="tab" data-tab="crawl" data-i18n="tab.crawl">爬虫</button>
   </div>
 
   <div class="tab-body" id="tabTimeline">
@@ -119,6 +120,18 @@
       <span class="hint" id="reportHint"></span>
     </div>
     <pre class="report-body" id="reportBody"></pre>
+  </div>
+  <div class="tab-body" id="tabCrawl" hidden>
+    <div class="crawl-toolbar">
+      <button class="btn" id="crawlReload" data-i18n="btn.reloadShort">↻ 重新加载</button>
+      <span class="hint" id="crawlHint"></span>
+    </div>
+    <!-- 爬虫不可达时只替代本页签内容，不影响其它页签 -->
+    <div class="crawl-warn" id="crawlWarn" hidden></div>
+    <h3 class="crawl-head" data-i18n="crawl.globalHeading">本进程窗口（全局）</h3>
+    <div class="crawl-grid" id="crawlGlobal"></div>
+    <h3 class="crawl-head" data-i18n="crawl.taskHeading">本任务抓取体检</h3>
+    <div class="crawl-grid" id="crawlTask"></div>
   </div>
 </aside>
 <div class="scrim" id="scrim" hidden></div>

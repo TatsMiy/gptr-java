@@ -3,6 +3,7 @@ package com.gptr.benchmark.dims;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.gptr.benchmark.dataset.BenchmarkItem;
 import com.gptr.benchmark.llm.JudgeClient;
+import com.gptr.engine.write.CitationVerifier;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -75,7 +76,9 @@ public final class HallucinationJudge {
 
     public Verdict judge(BenchmarkItem item, String report, JudgeClient judge) {
         ReportText.Split split = ReportText.split(report);
-        List<ReportText.Sentence> sentences = ReportText.sentences(split.body(), MAX_SENTENCES);
+        // 编号化报告的正文只有 [n]，须经参考文献表的编号表反解才能取到逐句取证依据
+        List<ReportText.Sentence> sentences = ReportText.sentences(split.body(), MAX_SENTENCES,
+                CitationVerifier.referenceIndex(split.references()));
         if (sentences.isEmpty()) {
             return null;
         }

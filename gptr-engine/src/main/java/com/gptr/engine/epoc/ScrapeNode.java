@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gptr.engine.EffectiveBudgets;
 import com.gptr.engine.context.ContextManager;
 import com.gptr.integration.client.LlmClient;
+import com.gptr.integration.client.ScrapeBatch;
 import com.gptr.integration.client.ScrapedContent;
 import com.gptr.integration.client.ScraperClient;
 import java.util.ArrayList;
@@ -67,14 +68,18 @@ final class ScrapeNode {
     private final LlmClient llm;
     private final DistillGate gate;
     private final DoubleConsumer costCallback;
+    /** 本次任务的关联 id，随抓取请求发给后端（供后端日志归因）。 */
+    private final String requestId;
 
-    /** 依赖构造注入（scraper / llm / 蒸馏闸 / 成本回调）。每次 {@code buildReal} 新建一个实例，
+    /** 依赖构造注入（scraper / llm / 蒸馏闸 / 成本回调 / 关联 id）。每次 {@code buildReal} 新建一个实例，
      *  使 gate 与 costCallback 在整图生命周期内保持一致；本类不持有可变静态状态。 */
-    ScrapeNode(ScraperClient scraper, LlmClient llm, DistillGate gate, DoubleConsumer costCallback) {
+    ScrapeNode(ScraperClient scraper, LlmClient llm, DistillGate gate, DoubleConsumer costCallback,
+               String requestId) {
         this.scraper = scraper;
         this.llm = llm;
         this.gate = gate;
         this.costCallback = costCallback;
+        this.requestId = requestId == null ? "" : requestId;
     }
 
     /** 抓取当前轮 searchResults 中的 URL（visited 过滤，跨层不重复抓）。
@@ -119,8 +124,11 @@ final class ScrapeNode {
         }
         int contentCap = budgets.pageRawCap();
         List<ScrapedContent> pages;
+        Map<String, Object> batchHealth;
         try {
-            pages = budgets.extraChars() > 0 ? scraper.scrape(batch, budgets.extraChars()) : scraper.scrape(batch);
+            ScrapeBatch result = scraper.scrapeDetailed(batch, budgets.extraChars(), requestId);
+            pages = result.contents();
+            batchHealth = ScrapeHealth.tally(result.outcomes());
         } catch (Exception e) {
             // 爬虫调用失败：必须先把"已取名"计入统计再降级——否则漏斗显示"取名 0 → 抓成 0"，
             // 读者会误判为"没检索到 URL"（真实原因是抓取失败）。降级行为不变：
@@ -184,6 +192,11 @@ final class ScrapeNode {
         updates.put(DeepResearchState.K_VISITED_URLS, merged);
         updates.put(DeepResearchState.K_CHAIN_STATS, chainStats);
         updates.put(DeepResearchState.K_FETCHED_URLS, fetched);
+        // 抓取体检：跨轮累加（每轮的增量合并进状态）。
+        // ⚠️ 整批调用抛异常时**不**伪造 outcome（那些 URL 没有任何可归因的原因），
+        // 故该轮不计入体检 —— 此时"体检五桶之和 < picked"本身就是"有一轮没问出来"的信号。
+        updates.put(DeepResearchState.K_SCRAPE_HEALTH,
+                ScrapeHealth.merge(state.scrapeHealth(), batchHealth));
         if (pages.isEmpty()) {
             return updates;
         }

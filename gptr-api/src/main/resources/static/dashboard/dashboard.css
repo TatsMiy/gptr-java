@@ -269,3 +269,25 @@ textarea:focus, input:focus { outline: none; border-color: var(--acc); }
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #2a3550; border-radius: 5px; }
+
+/* ---- 爬虫页签（进程窗口 + 每任务体检） ----
+ * 两半用同一个网格：左列是名字，右列是数字/明细。
+ * 左列定宽使两半对齐，右列可换行（域名与失败样本会长）。 */
+.crawl-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.crawl-toolbar .hint { color: var(--dim); font-size: 12px; }
+.crawl-warn {
+  margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--bad);
+  border-radius: 8px; background: #2a1418; color: #ffb3ba; font-size: 12px;
+}
+.crawl-head {
+  margin: 6px 0 8px; font-size: 13px; font-weight: 600; color: var(--fg);
+}
+.crawl-grid { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.crawl-row {
+  display: grid; grid-template-columns: 190px 1fr; gap: 10px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; font-size: 12px;
+}
+.crawl-k { color: var(--dim); }
+.crawl-v { word-break: break-word; }
+.crawl-empty { color: var(--dim); font-size: 12px; padding: 4px 2px; }

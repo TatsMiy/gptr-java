@@ -17,6 +17,14 @@ public final class HttpDefaults {
     /** 非 2xx 响应体写进异常/日志时的截断长度（防止整个 HTML 错误页进日志）。 */
     public static final int ERROR_BODY_MAX_CHARS = 300;
 
+    /**
+     * 调用链关联 id 的请求头名（值 = 任务 id）。
+     *
+     * <p>检索与抓取两个客户端必须用**同一个**头名：不一致时关联不会报错，
+     * 只会静默失效——这正是它收敛到此处、而不是各自持一份的原因。
+     */
+    public static final String REQUEST_ID_HEADER = "X-Request-Id";
+
     private HttpDefaults() {
     }
 }

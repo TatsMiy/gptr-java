@@ -97,9 +97,13 @@ public class SectionWriter {
     public record SectionOutcome(String markdown, int unauthorized, boolean retried) {
     }
 
-    /** 总结果（references 已机械并入 report）。 */
-    public record WriteResult(String report, int sectionCount, int unauthorizedTotal,
-                              int retriedSections, int fallbackNotes) {
+    /** 总结果。
+     *
+     *  <p>{@code report} 为编号化终稿（正文链接已折叠为 {@code [n]}，URL 集中在参考文献表）；
+     *  {@code verificationText} 为编号前的节原文。<b>引用核验必须读后者</b>：终稿正文不含 URL，
+     *  拿终稿去数会得到"零越权引用"的假绿灯。 */
+    public record WriteResult(String report, String verificationText, int sectionCount,
+                              int unauthorizedTotal, int retriedSections, int fallbackNotes) {
     }
 
     public SectionWriter(LlmClient llm, int sectionContextChars, boolean retryOnUnauthorized) {
@@ -755,10 +759,13 @@ public class SectionWriter {
     }
 
     // ------------------------------------------------------------------
-    // merge（Key Takeaways + 机械 References）
+    // merge（Key Takeaways + 编号化正文与参考文献）
     // ------------------------------------------------------------------
 
-    /** 组装终稿：标题 + takeaways + 各节正文 + 机械 References。 */
+    /** 组装终稿：标题 + takeaways + 各节正文（链接已折叠为编号）+ 编号参考文献表。
+     *
+     *  <p>编号<b>跨节全局连续</b>：逐节写作会对同一来源跨节反复引用，故编号表由
+     *  {@link CitationNumbering} 按 canonical 去重后统一分配（详见该类 javadoc）。 */
     public String merge(String title, List<String> sectionMarkdowns, String takeaways) {
         StringBuilder sb = new StringBuilder();
         if (title != null && !title.isBlank()) {
@@ -767,23 +774,12 @@ public class SectionWriter {
         if (takeaways != null && !takeaways.isBlank()) {
             sb.append("## Key Takeaways\n\n").append(takeaways.trim()).append("\n\n");
         }
+        CitationNumbering.Numbering numbering = new CitationNumbering.Numbering();
         for (String md : sectionMarkdowns) {
-            sb.append(md.trim()).append("\n\n");
+            sb.append(numbering.numberize(md).trim()).append("\n\n");
         }
-        // References 机械生成：全部节正文 in-text markdown 链接（原文顺序去重）。
-        // 配对扫描（URL 内括号如 wiki (deep_learning) 完整保留），与
-        // CitationVerifier 扫描同构——不再用截断正则产出畸形 URL。
-        LinkedHashSet<String> refs = new LinkedHashSet<>();
-        for (String md : sectionMarkdowns) {
-            for (Link link : extractMarkdownLinks(md)) {
-                refs.add("- [" + link.label() + "](" + link.url() + ")");
-            }
-        }
-        if (!refs.isEmpty()) {
-            sb.append("## References\n\n");
-            for (String r : refs) {
-                sb.append(r).append("\n");
-            }
+        if (!numbering.refs().isEmpty()) {
+            sb.append(CitationNumbering.renderReferences(numbering.refs()));
         }
         return sb.toString();
     }
@@ -791,67 +787,15 @@ public class SectionWriter {
     /**
      * 提取节文本中的 markdown 链接 {@code [label](url)}（包可见：测试用）。
      *
-     * <p>URL 段括号配对（与 {@link CitationVerifier#extractUrls} 同构）：URL 内含
-     * {@code (deep_learning)} 时其 {@code )} 属 URL；配平后的第一个未配对 {@code )}
-     * 才是链接闭合；终止字符 = 空白/引号/反引号/{@code ]} 等。仅收 http(s) 链接。
+     * <p>只保留 label 与 url；扫描器本体见 {@link CitationVerifier#scanMarkdownLinks}。
      */
     static List<Link> extractMarkdownLinks(String text) {
-        List<Link> out = new ArrayList<>();
-        if (text == null || text.isBlank()) {
-            return out;
-        }
-        int n = text.length();
-        for (int i = 0; i < n; ) {
-            if (text.charAt(i) != '[') {
-                i++;
-                continue;
-            }
-            int close = text.indexOf(']', i + 1);
-            if (close < 0 || close + 1 >= n || text.charAt(close + 1) != '(') {
-                i++;
-                continue;
-            }
-            String label = text.substring(i + 1, close).trim();
-            int j = scanLinkUrlEnd(text, close + 2);
-            String url = text.substring(close + 2, j).trim();
-            boolean http = url.regionMatches(true, 0, "https://", 0, 8)
-                    || url.regionMatches(true, 0, "http://", 0, 7);
-            if (!label.isEmpty() && http) {
-                out.add(new Link(label, url));
-            }
-            i = Math.max(j + 1, i + 1);
+        List<CitationVerifier.LinkSpan> spans = CitationVerifier.scanMarkdownLinks(text);
+        List<Link> out = new ArrayList<>(spans.size());
+        for (CitationVerifier.LinkSpan s : spans) {
+            out.add(new Link(s.label(), s.url()));
         }
         return out;
-    }
-
-    /** 从 start 扫到 URL 段结束位置（括号配平；遇 {@link #isLinkUrlTerminator} 停）。
-     *  <p>与 {@link CitationVerifier#extractUrls} 的扫描同构，但终止字符集更窄
-     *  （不含逗号/中文句读——本方法只服务 markdown 链接闭合，语义保持原样）。 */
-    private static int scanLinkUrlEnd(String text, int start) {
-        int n = text.length();
-        int j = start;
-        int open = 0;
-        while (j < n) {
-            char c = text.charAt(j);
-            if (c == '(') {
-                open++;
-            } else if (c == ')') {
-                if (open == 0) {
-                    break; // markdown 链接闭合
-                }
-                open--;
-            } else if (isLinkUrlTerminator(c)) {
-                break;
-            }
-            j++;
-        }
-        return j;
-    }
-
-    /** 链接 URL 终止字符（空白/引号/反引号/{@code ]}/{@code >}）。 */
-    private static boolean isLinkUrlTerminator(char c) {
-        return c == ']' || c == '>' || c == '"' || c == '\'' || c == '`'
-                || Character.isWhitespace(c);
     }
 
     // ------------------------------------------------------------------

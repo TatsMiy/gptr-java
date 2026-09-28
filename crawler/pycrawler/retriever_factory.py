@@ -30,6 +30,15 @@ _RETRIEVER_MODULES = {
 }
 
 
+def retriever_names() -> tuple:
+    """Names this factory can build.
+
+    The counting layer uses it to keep a request-supplied string out of its
+    labels: an unknown name is pooled rather than becoming a key of its own.
+    """
+    return tuple(_RETRIEVER_MODULES)
+
+
 def get_retriever(retriever: str):
     """按名返回检索器类；未知名字返回 None。
 

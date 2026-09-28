@@ -33,7 +33,8 @@ final class SearchNode {
      *  同时把每子查询结果组装为独立条目组（queryItems，与 queries 对齐）。
      *  每子查询响应带实际命中源 → 去重累积进状态 hitSources（观测 detail）。 */
     static Map<String, Object> runSearch(DeepResearchState state, SearchClient search,
-                                         SearchOptions searchOptions, RetrievalBudget retrieval) {
+                                         SearchOptions searchOptions, RetrievalBudget retrieval,
+                                         String requestId) {
         List<String> queries = state.queries();
         Map<String, Object> updates = new HashMap<>();
         if (queries.isEmpty()) {
@@ -46,7 +47,8 @@ final class SearchNode {
         Set<String> hits = new LinkedHashSet<>(state.hitSources());
         try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
             List<CompletableFuture<SearchResponse>> futures = queries.stream()
-                    .map(q -> CompletableFuture.supplyAsync(searchTask(search, q, searchOptions), pool))
+                    .map(q -> CompletableFuture.supplyAsync(
+                            searchTask(search, q, searchOptions, requestId), pool))
                     .toList();
             List<SearchResponse> perQueryResponses = new ArrayList<>();
             for (CompletableFuture<SearchResponse> f : futures) {
@@ -143,10 +145,16 @@ final class SearchNode {
      *  在内的所有异常」、{@code C3}「与 {@code Searcher.searchAll} 失败语义不一致」），
       *  **失败不可见时**，"检索器挂了"与"确实没结果"在日志里
      *  **完全一样**——本次冒烟即因此靠手工探测 crawler 才定位。 */
+    /** 无关联 id 的检索（澄清前奏等不携带任务 id 的调用点）。 */
     static SearchResponse safeSearch(
             SearchClient search, String query, SearchOptions opts) {
+        return safeSearch(search, query, opts, "");
+    }
+
+    static SearchResponse safeSearch(
+            SearchClient search, String query, SearchOptions opts, String requestId) {
         try {
-            return search.search(query, opts);
+            return search.search(query, opts, requestId);
         } catch (Exception e) {
             LOG.warn("[search] query failed: {} | {}: {}", query,
                     e.getClass().getSimpleName(), e.getMessage());
@@ -156,7 +164,7 @@ final class SearchNode {
 
     /** 单个子查询的检索任务。抽成独立方法以避开「lambda 内嵌 lambda」（门禁判据 4）。 */
     private static Supplier<SearchResponse> searchTask(SearchClient search, String query,
-                                                       SearchOptions opts) {
-        return () -> safeSearch(search, query, opts);
+                                                       SearchOptions opts, String requestId) {
+        return () -> safeSearch(search, query, opts, requestId);
     }
 }

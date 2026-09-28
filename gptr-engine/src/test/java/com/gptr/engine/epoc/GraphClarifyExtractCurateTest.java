@@ -3,6 +3,7 @@ package com.gptr.engine.epoc;
 import com.gptr.engine.EffectiveBudgets;
 import com.gptr.engine.budget.Budgets;
 import com.gptr.integration.client.LlmClient;
+import com.gptr.integration.client.ScrapeBatch;
 import com.gptr.integration.client.ScraperClient;
 import com.gptr.integration.client.ScrapedContent;
 import com.gptr.integration.client.SearchClient;
@@ -114,12 +115,12 @@ class GraphClarifyExtractCurateTest {
         }
 
         @Override
-        public List<ScrapedContent> scrape(List<String> urls) {
+        public ScrapeBatch scrapeDetailed(List<String> urls, int maxCharsPerUrl, String requestId) {
             List<ScrapedContent> out = new ArrayList<>();
             for (String u : urls) {
                 out.add(new ScrapedContent(u, "t", "full body of " + u));
             }
-            return out;
+            return ScrapeBatch.contentsOnly(out);
         }
     }
 
@@ -138,7 +139,8 @@ class GraphClarifyExtractCurateTest {
                         new DeepResearchGraph.ExtractOptions(perQuery, true),
                         new DeepResearchGraph.CurateOptions(curate, 10),
                         new DeepResearchGraph.FollowUpOptions(true, 0.5, false)),
-                Budgets.defaults());
+                Budgets.defaults(),
+                "test-request-id");
     }
 
     private static long countSystem(List<String> systems, String marker) {

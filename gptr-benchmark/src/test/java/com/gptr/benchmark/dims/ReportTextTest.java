@@ -132,4 +132,35 @@ class ReportTextTest {
         assertEquals(List.of("https://e.com/spec"), sentences.get(0).citationUrls());
         assertTrue(sentences.get(1).citationUrls().isEmpty());
     }
+
+    // ------------------------------------------------------------------
+    // 编号化报告：正文只剩 [n]，须经参考文献编号表反解才能取到逐句来源
+    // ------------------------------------------------------------------
+
+    @Test
+    void numberedMarkersResolveToUrls() {
+        String text = "论断甲已有证据 [1](#ref-1)。论断乙另有一源 [2](#ref-2)。";
+        List<ReportText.Sentence> sentences = ReportText.sentences(text, 10,
+                java.util.Map.of(1, "https://a.com/x", 2, "https://b.com/y"));
+        assertEquals(2, sentences.size());
+        assertEquals(List.of("https://a.com/x"), sentences.get(0).citationUrls());
+        assertEquals(List.of("https://b.com/y"), sentences.get(1).citationUrls());
+    }
+
+    @Test
+    void numberedMarkersWithoutIndexYieldNoUrls() {
+        List<ReportText.Sentence> sentences =
+                ReportText.sentences("论断甲已有证据 [1](#ref-1)。", 10);
+        assertEquals(1, sentences.size());
+        assertTrue(sentences.get(0).citationUrls().isEmpty(),
+                "没有编号表时不猜来源: " + sentences);
+    }
+
+    @Test
+    void danglingNumberContributesNoUrl() {
+        List<ReportText.Sentence> sentences = ReportText.sentences(
+                "论断甲引用了表外编号 [9](#ref-9)。", 10, java.util.Map.of(1, "https://a.com/x"));
+        assertEquals(1, sentences.size());
+        assertTrue(sentences.get(0).citationUrls().isEmpty(), "表外编号不得映射到别的来源");
+    }
 }

@@ -1,7 +1,10 @@
 package com.gptr.benchmark.dims;
 
+import com.gptr.engine.write.CitationVerifier;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -13,9 +16,9 @@ import java.util.regex.Pattern;
  */
 public final class ReportText {
 
-    /** References 段标题（报告尾部的来源清单段）。 */
-    private static final Pattern REF_HEADING = Pattern.compile(
-            "(?im)^\\s*#{2,6}\\s*(References|参考文献|参考资料|Sources|来源|参考来源)\\s*$");
+    /** 正文的编号引用标记：{@code [n]} 或 {@code [n](#ref-n)}（包可见：D1 口径共用）。 */
+    static final Pattern NUMBERED_MARKER = Pattern.compile(
+            "\\[(\\d{1,3})\\](?:\\(#ref-\\d{1,3}\\))?");
 
     /** 句界：中文句读标点后；ASCII .!? 后随空白/行尾/中文/引号（排除小数与缩写内切）。 */
     private static final Pattern SENTENCE_SPLIT = Pattern.compile(
@@ -35,26 +38,31 @@ public final class ReportText {
     public record Split(String body, String references) {
     }
 
+    /**
+     * 切出参考文献段：委托 {@link CitationVerifier#splitReferences}
+     * ——参考文献段的标题识别全仓只有一套，避免两处正则各自演化。
+     */
     public static Split split(String report) {
-        if (report == null || report.isBlank()) {
-            return new Split("", "");
-        }
-        Matcher m = REF_HEADING.matcher(report);
-        int idx = -1;
-        while (m.find()) {
-            idx = m.start();
-        }
-        if (idx < 0) {
-            return new Split(report, "");
-        }
-        return new Split(report.substring(0, idx), report.substring(idx));
+        CitationVerifier.Split s = CitationVerifier.splitReferences(report);
+        return new Split(s.body(), s.references());
     }
 
-    /** 切句并提取句内引用 URL（C3：句子与引用源绑定，供逐句判分）。
-     *  （链接感知切句）：先把 markdown 链接/裸 URL 整体替换为不可切哨兵，再
-     *  切纯文本；句读后紧邻链接的"纯链接残片"回流并入前句（引用支撑前句主张）；
-     *  首句孤立链接（无前句）前向吸收进下一正文句。URL 内句点/括号绝不参与句界。 */
+    /** 切句并提取句内引用 URL（不反解编号标记）。 */
     public static List<Sentence> sentences(String text, int cap) {
+        return sentences(text, cap, Map.of());
+    }
+
+    /**
+     * 切句并提取句内引用来源：含 URL 的 markdown 链接、裸 URL，以及编号标记 {@code [n]}
+     * （经 {@code refIndex} 反解为 URL）。
+     *
+     * <p>编号化报告的正文只剩 {@code [n]}——没有 {@code refIndex} 就取不到逐句取证依据。
+     *
+     * <p>链接感知切句：先把 markdown 链接/裸 URL 整体替换为不可切哨兵，再切纯文本；
+     * 句读后紧邻链接的"纯链接残片"回流并入前句（引用支撑前句主张）；首句孤立链接
+     * （无前句）前向吸收进下一正文句。URL 内句点/括号绝不参与句界。
+     */
+    public static List<Sentence> sentences(String text, int cap, Map<Integer, String> refIndex) {
         List<Sentence> out = new ArrayList<>();
         if (text == null || text.isBlank()) {
             return out;
@@ -84,6 +92,7 @@ public final class ReportText {
                 continue;
             }
             List<String> urls = new ArrayList<>(partUrls);
+            addNumberedUrls(s, refIndex, urls);
             if (!orphanUrls.isEmpty()) {
                 urls.addAll(0, orphanUrls); // 首句孤立链接前向吸收进首个正文句
                 orphanUrls.clear();
@@ -197,6 +206,20 @@ public final class ReportText {
     private static boolean isHttp(String u) {
         return u != null && (u.regionMatches(true, 0, "https://", 0, 8)
                 || u.regionMatches(true, 0, "http://", 0, 7));
+    }
+
+    /** 把句内编号标记 {@code [n]} 反解为 URL 并追加（保序、去重；n 不在表中则跳过）。 */
+    private static void addNumberedUrls(String text, Map<Integer, String> refIndex, List<String> urls) {
+        if (refIndex == null || refIndex.isEmpty()) {
+            return;
+        }
+        Matcher m = NUMBERED_MARKER.matcher(text);
+        while (m.find()) {
+            String url = refIndex.get(Integer.parseInt(m.group(1)));
+            if (url != null && !urls.contains(url)) {
+                urls.add(url);
+            }
+        }
     }
 
     /** 片段中的哨兵 → 提取 URL（保序）。 */
