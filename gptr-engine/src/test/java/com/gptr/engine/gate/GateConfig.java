@@ -80,6 +80,29 @@ final class GateConfig {
             "BUILD.md",
             "docker-compose.yml");
 
+    /**
+     * 判据 13 的排除项：**第三方 vendored 代码**的路径前缀。
+     *
+     * <p>为什么排除：那不是我们的代码 —— 既不能改它，也不该为它调棘轮；而且升级库版本时，
+     * 红不红会由**别人仓库里的字符串**决定，等于把门禁的稳定性外包出去。
+     *
+     * <p>与 {@link #PRIVATE_REF_SKIP} 分开写：那条的理由是"内容由导出流程决定"，
+     * 这条的理由是"内容不由本仓决定"，两件事不该共用一条理由。
+     * 版本、许可与来源 URL 记在仓根 {@code NOTICE}。
+     */
+    static final List<String> VENDOR_PREFIX = List.of(
+            "gptr-api/src/main/resources/static/dashboard/vendor/");
+
+    /** 路径是否落在 vendored 第三方代码目录下。 */
+    static boolean isVendored(String path) {
+        for (String prefix : VENDOR_PREFIX) {
+            if (path.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 判据 13 排除的二进制/外部数据扩展名。 */
     static final String BINARY_EXT_RE =
             "\\.(csv|png|jpe?g|gif|ico|svg|jar|bundle|zip|gz|woff2?|ttf|db)$";

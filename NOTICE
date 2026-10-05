@@ -20,3 +20,20 @@ Attribution notes:
 
 All other code is original to this project.
 Apache License 2.0 text: see LICENSE.
+
+## Third-party components included in this repository
+
+The observatory dashboard ships two JavaScript libraries as vendored static files
+(`gptr-api/src/main/resources/static/dashboard/vendor/`). They are served from this
+repository — there is no CDN or other network dependency at runtime.
+
+| Component | Version | License | Source | SHA-256 |
+|---|---|---|---|---|
+| [marked](https://github.com/markedjs/marked) | 18.0.14 | MIT | `https://cdn.jsdelivr.net/npm/marked@18.0.14/lib/marked.umd.js` | `21568877a938d2c4e7d74e27f18e60da96bb73a68809610ca39216e1efebae62` |
+| [DOMPurify](https://github.com/cure53/DOMPurify) | 3.4.16 | MPL-2.0 OR Apache-2.0 | `https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.min.js` | `2c90a9b46d6463f26038a29b686e82bc91de01fdac9d5229e7cfe3b360134ea2` |
+
+Each vendored file keeps its upstream license banner. Both are used unmodified:
+`marked` parses the report markdown, and `DOMPurify` sanitizes the resulting HTML
+against a fixed allow-list before it reaches the DOM. The readability gate excludes
+this directory from its repository-wide scan — see `GateConfig.VENDOR_PREFIX` for why
+third-party code is treated differently from our own.

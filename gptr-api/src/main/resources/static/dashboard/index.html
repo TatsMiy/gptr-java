@@ -117,9 +117,15 @@
   <div class="tab-body" id="tabReport" hidden>
     <div class="report-toolbar">
       <button class="btn" id="reportReload" data-i18n="btn.reloadShort">↻ 重新加载</button>
+      <!-- 两种视图：默认「渲染」（给人读），随时可切「原文」（排障与"所见即文件"） -->
+      <span class="seg" id="reportMode">
+        <button class="seg-btn active" id="reportModeRendered" data-i18n="rpt.viewRendered" data-i18n-attr="title:rpt.viewRendered.title" title="渲染后的排版视图（默认）">渲染</button>
+        <button class="seg-btn" id="reportModeRaw" data-i18n="rpt.viewRaw" data-i18n-attr="title:rpt.viewRaw.title" title="报告原文（markdown 源码，所见即文件）">原文</button>
+      </span>
       <span class="hint" id="reportHint"></span>
     </div>
     <pre class="report-body" id="reportBody"></pre>
+    <div class="report-rendered" id="reportRendered" hidden></div>
   </div>
   <div class="tab-body" id="tabCrawl" hidden>
     <div class="crawl-toolbar">
@@ -225,7 +231,13 @@
 </dialog>
 
 <!-- 脚本必须在全部 DOM（含各 dialog）之后：bind() 立即执行，引用前移的元素会 null。
-     i18n.js 必须**先于** dashboard.js —— 后者启动时就要用 I18N.t 渲染动态文案。 -->
+     ⚠️ 加载顺序有讲究：
+       1) vendor/ 两个库随仓发布（不打 CDN）——marked 负责解析、DOMPurify 负责净化；
+       2) markdown.js 是渲染的唯一入口，**依赖上面两个库**，故必须在它们之后；
+       3) i18n.js 必须先于 dashboard.js —— 后者启动时就要用 I18N.t 渲染动态文案。 -->
+<script src="vendor/marked.umd.js"></script>
+<script src="vendor/purify.min.js"></script>
+<script src="markdown.js"></script>
 <script src="i18n.js"></script>
 <script src="dashboard.js"></script>
 </body>

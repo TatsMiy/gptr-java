@@ -1,0 +1,41 @@
+# 自建 SearXNG（可选，零 key 检索源）的配置模板。
+#
+# 用法：先复制成同目录的 settings.yml 再按需改（settings.yml 已在 .gitignore 里，不入库）：
+#     cp searxng/settings.yml.example searxng/settings.yml
+# 然后 docker compose up -d searxng（compose 把 settings.yml 只读挂到 /etc/searxng/settings.yml）。
+#
+# 只覆盖下面这几项，其余沿用上游默认（use_default_settings: true）：
+#   · search.formats —— 上游默认只开 html；JSON API 必须显式打开，否则检索器拿到 HTML。
+#   · server.limiter —— 关掉：本机高频调用会被自己的限流挡住，干扰"到底是谁拦的"判断。
+#   · outgoing —— 上游 request_timeout 默认 3.0s，走代理往往不够；proxies 是**出口/轮换接线点**。
+use_default_settings: true
+
+server:
+  # ⚠️ 对外部署必须换成自己的随机串（SearXNG 用它签名会话与偏好）。
+  secret_key: "change-me-searxng-secret"
+  limiter: false
+  image_proxy: false
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+outgoing:
+  request_timeout: 12.0
+  extra_proxy_timeout: 5
+  # 出口 / 轮换接线点（**默认不启用**，即直连出网）。
+  # 需要让检索经某个（或某几个）代理出去时，取消注释并填自己的地址：
+  #
+  # proxies:
+  #   all://:
+  #     - http://<proxy-host>:<port>
+  #     - socks5h://<proxy-host>:<port>
+  #
+  # ⚠️ 上列表前先实测两件事（踩过的坑）：
+  #   ① 轮换粒度**不是每请求**：SearXNG 取下一个代理发生在"新建 HTTP client"时，且 client 按
+  #      代理缓存复用 ⇒ 同一代理会被反复选中；
+  #   ② 列表里混进一个不可用代理，会让该引擎被**暂停**（`Suspended: proxy error`），
+  #      期间请求不再发出 ⇒ 一次失败会放大成一段不可用。
+  # 因此列表里只放**已判活**的地址，并接受"单次失败即丢一次查询"。

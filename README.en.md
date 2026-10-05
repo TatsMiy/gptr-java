@@ -43,12 +43,15 @@ Resilience4j · vanilla-JS dashboard
 
 - **Task substrate**: Postgres queue (atomic dequeue) + lease renewal guard (anti-split-brain) +
   a three-part budget (steps / wall-clock / cost) + graceful retry.
-- **Zero-dependency dashboard** (`/dashboard/`, single page): live event timeline, task and cost
-  stats, report reader, evidence-bank browser, config panel, fork-as-blueprint; plus a **Crawler**
-  tab — the upper half is this process window's scrape counters (failure composition, top-10
-  domains, p50/p95 latency, page kinds and status classes, truncation, results per query), the
-  lower half is this task's crawl health (collected→picked→returned→valid funnel, silent drops,
+- **Single-page dashboard** (`/dashboard/`): live event timeline, task and cost stats,
+  **report reader (rendered markdown / raw source views)**, evidence-bank browser, config panel,
+  fork-as-blueprint; plus a **Crawler** tab — the upper half is this process window's scrape
+  counters (failure composition, top-10 domains, p50/p95 latency, page kinds and status classes,
+  truncation, results per query), the lower half is this task's crawl health
+  (collected→picked→returned→valid funnel, silent drops,
   **share of citations to never-fetched pages**, failure samples).
+  The front end has **no framework, no build step and no network dependency** (report rendering
+  uses the vendored `marked` + `DOMPurify` shipped in this repository; see `NOTICE`).
 - **Tests and gate**: engine **248** unit tests · crawler **81** unit tests
   (`python -m unittest discover -s tests`) · benchmark **45** · integration
   **14 classes / 22 cases**; a 13-criterion readability gate runs automatically with `mvn test`.

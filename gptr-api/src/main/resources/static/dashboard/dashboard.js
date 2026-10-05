@@ -129,6 +129,9 @@ const drawerState = {
   tab: "timeline",
   stage: {},              // stage 名 -> 状态 active/done/fail
   reportLoaded: false,
+  reportText: null,       // 报告原文缓存（两种视图共用，切换不重新请求）
+  reportMode: "rendered", // 报告视图：rendered（默认，给人读）| raw（排障）
+  reportRendered: false,  // 上一次渲染是否成功（只用于把提示语说准）
 };
 
 function openDrawer(id) {
@@ -144,6 +147,9 @@ function openDrawer(id) {
   drawerState.stage = {};
   drawerState.reportLoaded = false;
   drawerState.reportChars = null;
+  // 报告一律回到默认视图（渲染）：视图选择不持久化，也不跨任务沿用
+  drawerState.reportText = null;
+  drawerState.reportMode = "rendered";
   // 打开任务一律回到时间线页签并清空旧证据：否则上次停在"证据库"时，
   // 旧任务的证据 DOM 会残留显示在新任务标题下。
   drawerState.tab = "timeline";
@@ -334,7 +340,7 @@ function buildEventRow(ev) {
   };
 
   if (T === "STAGE_STARTED") { icon.textContent = "▶"; row.classList.add("stage-start"); label.textContent = t("ev.stageStarted", { stage: ev.stage }); }
-  else if (T === "STAGE_COMPLETED") { icon.textContent = "✅"; row.classList.add("stage-end"); label.textContent = t("ev.stageCompleted", { stage: ev.stage }); parseStagePayload(ev.payload, sub); }
+  else if (T === "STAGE_COMPLETED") { icon.textContent = "✅"; row.classList.add("stage-end"); label.textContent = t("ev.stageCompleted", { stage: ev.stage }); parseStagePayload(ev.payload, sub); row.title = esc(String(ev.payload == null ? "" : ev.payload)); }
   else if (T === "CREATED") plain(t("ev.created"), "📥", "");
   else if (T === "DISPATCHED") plain(t("ev.dispatched"), "🚀", "");
   else if (T === "RETRY") plain(t("ev.retry"), "🔁", "ev-fail");
@@ -353,26 +359,53 @@ function buildEventRow(ev) {
   return row;
 }
 
+/* 图节点 id → 人话。逐条显式列出（门禁要求字面引用），译不到就显示原 id ——
+ * 引擎新加一个节点时界面**退化为显示 id**，不空白、不报错。
+ * ⚠️ 只在表现层映射：事件 payload 里的节点 id 是 API 契约，一个字段都不改。
+ * ⚠️ 表**建在函数里**、每次按当前语言求值：写成模块级常量会把首次加载时的语言钉死，
+ *    切语言后节点名会留在旧语言上（实测踩过 —— 英文界面里冒出中文节点名）。 */
+function nodeText(id) {
+  const map = {
+    research_plan: t("node.research_plan"),
+    generate_queries: t("node.generate_queries"),
+    search: t("node.search"),
+    scrape: t("node.scrape"),
+    curate_sources: t("node.curate_sources"),
+    extract_learnings: t("node.extract_learnings"),
+    plan_reflect: t("node.plan_reflect"),
+    follow_up_queries: t("node.follow_up_queries"),
+  };
+  return map[id] || id;
+}
+
+/* 节点事件的副文本：只出"人话字段"，原始字段名留给 title（见 renderActivity）。
+ * 顺序固定，便于横向扫读；缺哪个就不显示哪个。 */
+function nodeBits(d) {
+  const bits = [];
+  if (d.depth !== undefined) bits.push(t("act.depthLayer", { n: d.depth + 1 }));
+  if (d.queries !== undefined) bits.push(t("act.queries", { n: d.queries }));
+  if (d.results !== undefined) bits.push(t("act.results", { n: d.results }));
+  if (d.learnings !== undefined) bits.push(t("act.learnings", { n: d.learnings }));
+  if (d.bank !== undefined) bits.push(t("act.bank", { n: d.bank }));
+  if (d.elapsedMs !== undefined) bits.push(t("act.elapsed", { s: (d.elapsedMs / 1000).toFixed(1) }));
+  return bits.join(" · ");
+}
+
 /* ACTIVITY payload：{kind, label, detail{...}}（telemetry-only，安全解析） */
 function renderActivity(payloadRaw, icon, row, label, sub) {
   const p = activityPayload(payloadRaw);
   const kind = p.kind || "?";
   const d = p.detail || {};
   const name = esc(p.label || "");
+  // 原始 detail 一律进 title：排障要看字段名时悬停即可，**不必**把它印在正文里
+  row.title = Object.keys(d).length ? JSON.stringify(d) : "";
   if (kind === "node") {
     const phase = d.phase === "start" ? "▶ " : (d.phase === "fail" ? "✗ " : "✓ ");
     icon.textContent = "⚙️";
     row.classList.add("ev-node");
     if (d.phase === "fail") row.classList.add("ev-fail");
-    label.textContent = t("act.node", { phase, name });
-    const bits = [];
-    if (d.depth !== undefined) bits.push("depth=" + d.depth);
-    if (d.learnings !== undefined) bits.push("learnings=" + d.learnings);
-    if (d.bank !== undefined) bits.push("bank=" + d.bank);
-    if (d.queries !== undefined) bits.push("queries=" + d.queries);
-    if (d.elapsedMs !== undefined) bits.push(t("act.elapsed", { s: (d.elapsedMs / 1000).toFixed(1) }));
-    if (d.chain) bits.push("chain=" + d.chain);
-    sub.textContent = bits.join(" · ");
+    label.textContent = t("act.node", { phase, name: nodeText(name) });
+    sub.textContent = nodeBits(d);
   } else if (kind === "search") {
     icon.textContent = "🔎";
     row.classList.add("ev-search");
@@ -381,7 +414,7 @@ function renderActivity(payloadRaw, icon, row, label, sub) {
     if (d.chain) bits.push(t("act.chain", { chain: d.chain }));
     if (d.queries !== undefined) bits.push(t("act.queries", { n: d.queries }));
     if (d.results !== undefined) bits.push(t("act.results", { n: d.results }));
-    if (d.retrieverCfg) bits.push("retriever=" + d.retrieverCfg);
+    if (d.retrieverCfg) bits.push(t("act.searchSource", { name: d.retrieverCfg }));
     sub.textContent = bits.join(" · ");
   } else if (kind === "section") {
     icon.textContent = "📝";
@@ -414,13 +447,59 @@ function renderActivity(payloadRaw, icon, row, label, sub) {
   }
 }
 
-/* 阶段完成 payload 摘要（扁平 + deep） */
+/* 阶段完成 payload 摘要（扁平 + deep）：字段名也译成人话，不再印 `queries=4`。
+ * 逐条显式列出（门禁要求字面引用）；顺序 = 这里的书写顺序，便于横向扫读。
+ * ⚠️ 与节点名同理：表建在函数里、按当前语言求值，**不缓存**（缓存会把首次加载的语言钉死）。 */
+function stageFields() {
+  return {
+    queries: t("stage.queries"),
+    sources: t("stage.sources"),
+    sections: t("stage.sections"),
+    learnings: t("stage.learnings"),
+    citedUrls: t("stage.citedUrls"),
+    reportChars: t("stage.reportChars"),
+    depthReached: t("stage.depthReached"),
+    evidenceNotes: t("stage.evidenceNotes"),
+    followUpQuestions: t("stage.followUpQuestions"),
+    writingMode: t("stage.writingMode"),
+    clarifyApplied: t("stage.clarifyApplied"),
+  };
+}
+
+/* 少数值是枚举或布尔，也要说人话；其余值原样（数字、字符串） */
+function stageValues() {
+  return {
+    section: t("stageVal.section"),
+    single: t("stageVal.single"),
+    true: t("stageVal.yes"),
+    false: t("stageVal.no"),
+  };
+}
+
+/* 值也要归一：**同一个字段在不同阶段形态不同** —— 实测 `queries` 在 PLANNING 是
+ * 子查询数组、在 SEARCHING 是数字。数组取条数（那才是读者要的那个数）；其余对象不硬渲染，
+ * 宁可不出，也不要印出 `[object Object]`。 */
+function stageValue(value) {
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+  if (value !== null && typeof value === "object") {
+    return null;
+  }
+  return stageValues()[String(value)] || value;
+}
+
 function parseStagePayload(payloadRaw, sub) {
-  let p = {};
-  try { p = typeof payloadRaw === "string" ? JSON.parse(payloadRaw) : (payloadRaw || {}); } catch (_) { return; }
+  const p = activityPayload(payloadRaw);
   const bits = [];
-  for (const k of ["queries", "sources", "sections", "learnings", "citedUrls", "reportChars", "depthReached", "evidenceNotes", "followUpQuestions", "writingMode", "clarifyApplied"]) {
-    if (p[k] !== undefined) bits.push(k + "=" + p[k]);
+  for (const [key, name] of Object.entries(stageFields())) {
+    if (p[key] === undefined) {
+      continue;
+    }
+    const value = stageValue(p[key]);
+    if (value !== null) {
+      bits.push(name + " " + value);
+    }
   }
   if (bits.length) sub.textContent = bits.join(" · ");
 }
@@ -489,11 +568,11 @@ function renderCrawlGlobal() {
   host.append(
     crawlRow(t("crawl.window", { s: s.uptime_s, n: s.workers }),
       t("crawl.total", { n: scrape.total })),
-    crawlRow(t("crawl.outcome"), crawlPairs(scrape.outcome)),
-    crawlRow(t("crawl.pageKind"), crawlPairs(scrape.page_kind)),
-    crawlRow(t("crawl.statusClass"), crawlPairs(scrape.status_class)),
+    crawlRow(t("crawl.outcome"), crawlPairs(scrape.outcome, "reason")),
+    crawlRow(t("crawl.pageKind"), crawlPairs(scrape.page_kind, "page_kind")),
+    crawlRow(t("crawl.statusClass"), crawlPairs(scrape.status_class, "status_class")),
     crawlRow(t("crawl.truncated", { n: scrape.truncated || 0 }),
-      t("crawl.nonSite", { list: (scrape.non_site_reasons || []).join(", ") })),
+      t("crawl.nonSite", { list: nonSiteText(scrape) })),
     crawlRow(t("crawl.latencyLabel"), t("crawl.latency", latencyParams(scrape.latency_ms))),
     crawlRow(t("crawl.topDomains", { n: (scrape.top_domains || []).length }),
       (scrape.top_domains || []).map(domainLine).join("  ·  ")),
@@ -531,7 +610,7 @@ function renderCrawlTask() {
     host.append(el("div", "crawl-empty", "—"));
   }
   for (const f of samples) {
-    host.append(crawlRow(esc(f.reason || ""), trunc(esc(f.url || ""), 110)));
+    host.append(crawlRow(codeText(f.reason || "", "reason"), trunc(esc(f.url || ""), 110)));
   }
   if (d.failuresOmitted) {
     host.append(crawlRow("", t("crawl.failuresOmitted", { n: d.failuresOmitted })));
@@ -569,23 +648,87 @@ function otherDomainsParams(other) {
 }
 
 function domainLine(row) {
-  const reasons = crawlPairs(row.by_reason);
+  const reasons = crawlPairs(row.by_reason, "reason");
   return esc(row.domain) + " " + row.total + (reasons ? " (" + reasons + ")" : "");
 }
 
+/* 检索源名字过 codeText：已知检索源名原样显示，**归并标签**（`other`）译成人话。
+ * 这与结果类别共用同一张表 —— 理由：这张表的语义就是"爬虫可能返回的取值"，检索源名也在其中。 */
 function retrieverLine(byRetriever) {
   return Object.entries(byRetriever || {})
-    .map(([name, classes]) => esc(name) + " " + crawlPairs(classes))
+    .map(([name, classes]) => esc(codeText(name, "retriever")) + " " + crawlPairs(classes, "result_class"))
     .join("  ·  ");
 }
 
-/* 只列非零项并按次数降序：词表里的 0 是给机器看的稳定列，人读时是噪声 */
-function crawlPairs(obj) {
+/* 取值域的译名映射：码 → 人话。
+ * ⚠️ 逐条显式列出，不用 `t("code." + code)` 拼 —— 双语文案门禁要求**每个词条都有字面引用**，
+ * 动态拼出来的 key 在门禁眼里是孤儿。
+ * 译不到的码返回原码：爬虫新增一个原因时界面**退化为显示码**，而不是空白或报错。
+ * ⚠️ 表建在函数里、按当前语言求值，**不缓存**（缓存会把首次加载的语言钉死）。
+ * ⚠️ **同名不同义**：`unknown` 在失败原因里是"没有交代原因"、在页型里是"判不出是什么页"
+ *    —— 一张扁平表会把后者说错（实测出过 "页面类型分布 原因未知×100"）。
+ *    故按**词表**取用：`codeText(code, "page_kind")` 会走下面这张 override 表。 */
+function codeText(code, vocabulary) {
+  const overrides = {
+    page_kind: { unknown: t("pagekind.unknown") },
+  };
+  const vocabularyMap = overrides[vocabulary];
+  if (vocabularyMap && vocabularyMap[code]) {
+    return vocabularyMap[code];
+  }
+  const map = {
+    ok: t("code.ok"),
+    http_4xx: t("code.http_4xx"),
+    http_5xx: t("code.http_5xx"),
+    timeout: t("code.timeout"),
+    network_error: t("code.network_error"),
+    too_large: t("code.too_large"),
+    no_session: t("code.no_session"),
+    empty_content: t("code.empty_content"),
+    too_short: t("code.too_short"),
+    block_challenge: t("code.block_challenge"),
+    word_list: t("code.word_list"),
+    pdf_unresolved: t("code.pdf_unresolved"),
+    unsafe_url: t("code.unsafe_url"),
+    exception: t("code.exception"),
+    unknown: t("code.unknown"),
+    empty: t("code.empty"),
+    error: t("code.error"),
+    network: t("code.network"),
+    none: t("code.none"),
+    article: t("code.article"),
+    listing: t("code.listing"),
+    login_or_wall: t("code.login_or_wall"),
+    download_or_resource: t("code.download_or_resource"),
+    error_page: t("code.error_page"),
+    other: t("code.other"),
+  };
+  return map[code] || code;
+}
+
+/* 只列非零项并按次数降序：词表里的 0 是给机器看的稳定列，人读时是噪声。
+ * 值一律过 codeText（译不到就原样）—— 界面上不该出现 "network_error×50" 这种码海。
+ * `vocabulary` 用来处理**同名不同义**的码（见 codeText）。 */
+function crawlPairs(obj, vocabulary) {
   return Object.entries(obj || {})
     .filter(([, n]) => Number(n) > 0)
     .sort((a, b) => b[1] - a[1])
-    .map(([k, n]) => esc(k) + "×" + n)
+    .map(([k, n]) => esc(codeText(k, vocabulary)) + "×" + n)
     .join(" · ");
+}
+
+/* 本地拒绝（不算站点失败）那几个原因：**只列真的发生过并给次数**。
+ * ⚠️ 曾经的写法把"class 清单"当数据印出来（`缺会话/代理配置, 文件过大, 地址不安全`），
+ * 读起来像"这三件事都发生了" —— 分类说明与事件列表必须分开。 */
+function nonSiteText(scrape) {
+  const counts = scrape.outcome || {};
+  const hits = (scrape.non_site_reasons || [])
+    .map((reason) => [reason, Number(counts[reason] || 0)])
+    .filter(([, n]) => n > 0);
+  if (!hits.length) {
+    return t("crawl.nonSiteNone");
+  }
+  return hits.map(([reason, n]) => codeText(reason, "reason") + "×" + n).join(" · ");
 }
 
 function crawlRow(label, value) {
@@ -687,23 +830,71 @@ async function loadReport(force) {
   if (!id) return;
   if (!force && drawerState.reportLoaded) return;
   drawerState.reportLoaded = true;
-  const body = $("reportBody");
   const hint = $("reportHint");
   if (drawerState.task && drawerState.task.status !== "SUCCEEDED") {
-    body.textContent = "";
+    drawerState.reportText = null;
+    showReport();
     hint.textContent = t("rpt.notSucceeded");
     return;
   }
   hint.textContent = t("stage.loading");
   try {
     const txt = await j("GET", API + "/" + id + "/report");
-    body.textContent = txt;
+    drawerState.reportText = txt;
     drawerState.reportChars = txt.length;
-    hint.textContent = t("rpt.loaded", { n: txt.length });
+    showReport();
   } catch (e) {
-    body.textContent = "";
+    drawerState.reportText = null;
+    drawerState.reportChars = null;
+    showReport();
     hint.textContent = String(e.message);
   }
+}
+
+/* 报告两视图：默认「渲染」（给人读），可切「原文」（排障 / 所见即文件）。
+ * 切换**不重新请求** —— 原文缓存在 drawerState.reportText 里，两种视图共用同一份。
+ * ⚠️ 渲染不可用时一律回退原文（库没加载 / 解析抛异常 / 净化后为空）：宁可丑，不可乱 ——
+ * 把两万字报告渲染错，比不渲染更糟。 */
+function showReport() {
+  const raw = $("reportBody");
+  const box = $("reportRendered");
+  const txt = drawerState.reportText;
+  const html = drawerState.reportMode === "rendered" && txt && window.GPTR_MD
+    ? window.GPTR_MD.render(txt)
+    : null;
+  drawerState.reportRendered = !!html;
+  if (html) {
+    box.innerHTML = html;
+    box.hidden = false;
+    raw.hidden = true;
+  } else {
+    raw.textContent = txt || "";
+    raw.hidden = false;
+    box.replaceChildren();
+    box.hidden = true;
+  }
+  syncReportMode();
+  $("reportHint").textContent = reportHintText();
+}
+
+/* 三种状态要说清，别把"用户主动选了原文"说成"渲染失败回退" */
+function reportHintText() {
+  const n = drawerState.reportChars || 0;
+  if (drawerState.reportMode === "raw") {
+    return t("rpt.loaded", { n });
+  }
+  return drawerState.reportRendered ? t("rpt.rendered", { n }) : t("rpt.fallback", { n });
+}
+
+function setReportMode(mode) {
+  drawerState.reportMode = mode;
+  showReport();
+}
+
+function syncReportMode() {
+  const rendered = drawerState.reportMode === "rendered" && !$("reportRendered").hidden;
+  $("reportModeRendered").classList.toggle("active", rendered);
+  $("reportModeRaw").classList.toggle("active", !rendered);
 }
 
 /* ---- 操作：取消 / 重试 ---- */
@@ -968,7 +1159,7 @@ function rerenderAll() {
   renderCrawlTask();
   if (drawerState.evidence) rerenderEvidence();
   if (drawerState.reportChars !== null && drawerState.task) {
-    $("reportHint").textContent = t("rpt.loaded", { n: drawerState.reportChars });
+    $("reportHint").textContent = reportHintText();
   }
   if (cfgRows.length) renderConfig();
   if (!submitState.blueprint) $("submitDialogTitle").textContent = t("form.title");
@@ -1008,6 +1199,9 @@ function bind() {
   $("dCancel").onclick = doCancel;
   $("dRetry").onclick = doRetry;
   $("reportReload").onclick = () => { drawerState.reportLoaded = false; loadReport(true); };
+  // 视图切换只重渲染缓存里的原文，不发请求（两种视图共用同一份 reportText）
+  $("reportModeRendered").onclick = () => setReportMode("rendered");
+  $("reportModeRaw").onclick = () => setReportMode("raw");
   $("evReload").onclick = loadEvidence;
   // 爬虫页签的刷新要重打计数接口（进程窗口在变）；本任务那一半从事件缓存重渲
   $("crawlReload").onclick = () => { loadCrawlerStats(); renderCrawlTask(); };

@@ -265,6 +265,10 @@ public final class ReadabilityGate {
             if (GateConfig.PRIVATE_REF_SKIP.contains(f)) {
                 continue;
             }
+            // 第三方 vendored 代码不是本仓源码：排除的理由见 GateConfig.VENDOR_PREFIX
+            if (GateConfig.isVendored(f)) {
+                continue;
+            }
             if (f.matches(".*" + GateConfig.BINARY_EXT_RE)) {
                 continue;
             }

@@ -120,33 +120,105 @@
       "act.sectionIndex": "第 {n} 节",
       "act.activity": "活动 {kind}",
       "act.activityNamed": "活动 {kind}：{name}",
-      "act.crawlHealth": "抓取体检：{line}",
+      "act.crawlHealth": "抓取流程：{line}",
+      "act.depthLayer": "第 {n} 层",
+      "act.learnings": "事实×{n}",
+      "act.bank": "证据库 {n} 条",
+      "act.searchSource": "检索源 {name}",
 
-      /* 爬虫页签：上半 = 本进程窗口（爬虫重启即清零），下半 = 本任务的抓取体检 */
+      /* 图节点 id → 人话（8 个，与引擎的 DeepResearchGraph 常量一一对应）。
+         ⚠️ 只在**表现层**映射：事件 payload 里的节点 id 是 API 契约，一个字段都不改
+         （`DashboardNodeLabelsTest` 拿引擎常量与这里的 key 对账，防"新加节点界面显示原 id"悄悄发生）。 */
+      "node.research_plan": "制定研究计划",
+      "node.generate_queries": "拆解研究维度、生成检索词",
+      "node.search": "全网检索",
+      "node.scrape": "抓取网页正文",
+      "node.curate_sources": "筛选来源质量",
+      "node.extract_learnings": "从网页里提炼事实",
+      "node.plan_reflect": "检查覆盖、找缺口",
+      "node.follow_up_queries": "生成下一轮追问",
+
+      /* 阶段摘要的字段名 → 人话（STAGE_COMPLETED 那一行）。
+         渲染成"名字 值"，不再印 `queries=4` 这种字段名。 */
+      "stage.queries": "检索词",
+      "stage.sources": "来源",
+      "stage.sections": "章节",
+      "stage.learnings": "事实",
+      "stage.citedUrls": "引用",
+      "stage.reportChars": "报告字数",
+      "stage.depthReached": "层数",
+      "stage.evidenceNotes": "证据",
+      "stage.followUpQuestions": "追问",
+      "stage.writingMode": "写作方式",
+      "stage.clarifyApplied": "问题澄清",
+      "stageVal.section": "逐节写作",
+      "stageVal.single": "单遍写作",
+      "stageVal.yes": "已应用",
+      "stageVal.no": "未应用",
+
+      /* 爬虫页签：上半 = 本进程窗口（爬虫重启即清零），下半 = 本任务的抓取体检。
+         文案纪律：**界面说人话，字段名留给 API** —— 读者不需要知道后端把它叫 picked，
+         只需要知道"从检索结果里挑了几个去抓"。把内部术语原样搬上界面，等于把调测日志投影给读者。 */
       "crawl.globalHeading": "本进程窗口（全局）",
       "crawl.taskHeading": "本任务抓取体检",
-      "crawl.window": "窗口 {s}s · 单进程 {n} worker",
-      "crawl.total": "抓取共 {n} 行",
-      "crawl.outcome": "失败构成（按原因）",
-      "crawl.pageKind": "页型分布",
-      "crawl.statusClass": "状态码类",
-      "crawl.truncated": "截断 {n} 行",
+      "crawl.window": "统计窗口 {s} 秒 · 单进程（{n} 个 worker）",
+      "crawl.total": "共抓取 {n} 次",
+      "crawl.outcome": "失败原因分布",
+      "crawl.pageKind": "页面类型分布",
+      "crawl.statusClass": "HTTP 状态分布",
+      "crawl.truncated": "正文被截断 {n} 次",
       "crawl.latencyLabel": "耗时",
-      "crawl.latency": "p50 {p50}ms · p95 {p95}ms（分位取最近 {sampled}/{total} 次）",
-      "crawl.topDomains": "按域名 Top {n}",
-      "crawl.otherDomains": "其余 {total} 行来自 {domains} 个域名（另有 {unreadable} 行没有可用主机名）",
+      "crawl.latency": "中位 {p50} 毫秒 · 95 分位 {p95} 毫秒（按最近 {sampled}/{total} 次计算）",
+      "crawl.topDomains": "抓取最多的 {n} 个站点",
+      "crawl.otherDomains": "其余 {total} 次来自 {domains} 个站点（另有 {unreadable} 次没有可用主机名）",
       "crawl.search": "检索",
-      "crawl.byRetriever": "按检索器",
-      "crawl.resultsPerQuery": "每查询结果数",
-      "crawl.nonSite": "本地拒绝（不该算站点失败）：{list}",
-      "crawl.funnel": "漏斗 检索 {collected} → 取名 {picked} → 抓成 {returned} → 有效 {valid}",
-      "crawl.citedUnread": "引用未读源 {unread}/{cited}（{pct}%）",
-      "crawl.buckets": "静默丢失 {silent} · 登录墙 {blocked} · 干净成功 {clean} · 降级成功 {degraded} · 其他失败 {failed}",
-      "crawl.failures": "失败样本（URL + 原因）",
+      "crawl.byRetriever": "按检索源",
+      "crawl.resultsPerQuery": "每次检索返回条数",
+      "crawl.nonSite": "本地拒绝（不算站点的问题）：{list}",
+      "crawl.nonSiteNone": "本轮没有",
+      "crawl.funnel": "抓取流程：检索到 {collected} 个来源 → 挑出 {picked} 个去抓 → 抓回 {returned} 页 → 其中可用 {valid} 页",
+      "crawl.citedUnread": "报告引用了 {cited} 个来源，其中 {unread} 个（{pct}%）始终没抓到正文",
+      "crawl.buckets": "没有原因就消失 {silent} 次 · 撞上登录墙/付费墙 {blocked} 次 · 干净抓到 {clean} 次 · 抓到但有保留 {degraded} 次 · 其他失败 {failed} 次",
+      "crawl.failures": "失败明细（网址 + 原因）",
       "crawl.failuresOmitted": "另有 {n} 条超出上限未列出",
       "crawl.noHealth": "该任务没有抓取体检事件：旧任务，或本次没走到抓取",
-      "crawl.unreachable": "爬虫不可达：{msg}",
-      "crawl.noData": "本窗口还没有任何抓取记录",
+      "crawl.unreachable": "爬虫服务不可达：{msg}",
+      "crawl.noData": "本次统计窗口内还没有抓取记录",
+
+      /* 爬虫返回的取值域译名（码 → 人话）。
+         ⚠️ 取值域**由爬虫侧拥有**（`crawler/pycrawler/scraper/outcome.py` 的 REASONS/PAGE_KINDS），
+         这里只是**镜像**：译不到的码**照原样显示**（不空白、不报错）⇒ 爬虫新增一个原因时界面退化为显示码，
+         而不是坏掉。镜像与主人是否一致由测试钉住（`DashboardCodeLabelsTest`）。
+         `2xx`–`5xx` 不译：HTTP 状态类是通用说法。 */
+      "code.ok": "成功",
+      "code.http_4xx": "站点返回 4xx",
+      "code.http_5xx": "站点返回 5xx",
+      "code.timeout": "超时",
+      "code.network_error": "连不上",
+      "code.too_large": "文件过大（本地放弃）",
+      "code.no_session": "缺会话/代理配置（本地放弃）",
+      "code.empty_content": "抽不出正文",
+      "code.too_short": "正文太短",
+      "code.block_challenge": "被反爬拦截",
+      "code.word_list": "疑似词表挑战页",
+      "code.pdf_unresolved": "PDF 打不开",
+      "code.unsafe_url": "地址不安全（本地拒绝）",
+      "code.exception": "处理时异常",
+      "code.unknown": "原因未知",
+      "code.empty": "没返回结果",
+      "code.error": "调用出错",
+      "code.network": "网络层失败",
+      "code.none": "没有状态码",
+      "code.article": "正文页",
+      "code.listing": "列表页",
+      "code.login_or_wall": "登录墙/付费墙",
+      "code.download_or_resource": "下载/资源页",
+      "code.error_page": "错误页",
+      "code.other": "其他",
+      /* ⚠️ 同名不同义：`unknown` 在"失败原因"里是"没有交代原因"，在"页型"里是"判不出是什么页"。
+         用同一张扁平表会把后者说错（实测："页面类型分布 原因未知×100"）。
+         ⇒ 页型侧单独留一个词条，按词表取用。 */
+      "pagekind.unknown": "未能判定页型",
 
       /* 证据库 */
       "evd.count": "{n} 条结构化证据（extract 提炼：insight 为模型判断，quote 为来源原文）",
@@ -158,6 +230,12 @@
       /* 报告 */
       "rpt.notSucceeded": "任务尚未成功完成，报告在 SUCCEEDED 后可用。",
       "rpt.loaded": "text/markdown 原文（{n} 字符）",
+      "rpt.viewRendered": "渲染",
+      "rpt.viewRendered.title": "渲染后的排版视图（默认）",
+      "rpt.viewRaw": "原文",
+      "rpt.viewRaw.title": "报告原文（markdown 源码，所见即文件）",
+      "rpt.rendered": "已渲染（原文 {n} 字符）",
+      "rpt.fallback": "渲染不可用，已回退显示原文（原文 {n} 字符）",
 
       /* 提交弹窗 */
       "form.title": "提交新研究",
@@ -311,34 +389,110 @@
       "act.sectionIndex": "section {n}",
       "act.activity": "Activity {kind}",
       "act.activityNamed": "Activity {kind}: {name}",
-      "act.crawlHealth": "Crawl health: {line}",
+      "act.crawlHealth": "Crawl flow: {line}",
+      "act.depthLayer": "layer {n}",
+      "act.learnings": "{n} facts",
+      "act.bank": "evidence bank: {n}",
+      "act.searchSource": "source {name}",
+
+      /* Graph node ids → plain language (8, one per engine constant in DeepResearchGraph).
+         ⚠️ Presentation layer only: the node id inside the event payload is an API contract
+         and is left untouched (`DashboardNodeLabelsTest` reconciles these keys against the
+         engine constants, so a newly added node cannot silently show up as a raw id). */
+      "node.research_plan": "Planning the research",
+      "node.generate_queries": "Breaking the question into searches",
+      "node.search": "Searching the web",
+      "node.scrape": "Fetching page text",
+      "node.curate_sources": "Filtering source quality",
+      "node.extract_learnings": "Extracting facts from pages",
+      "node.plan_reflect": "Checking coverage, finding gaps",
+      "node.follow_up_queries": "Generating follow-up questions",
+
+      /* Stage-summary field names → plain language (the STAGE_COMPLETED row).
+         Rendered as "name value" instead of printing `queries=4`. */
+      "stage.queries": "searches",
+      "stage.sources": "sources",
+      "stage.sections": "sections",
+      "stage.learnings": "facts",
+      "stage.citedUrls": "citations",
+      "stage.reportChars": "report chars",
+      "stage.depthReached": "layers",
+      "stage.evidenceNotes": "evidence items",
+      "stage.followUpQuestions": "follow-ups",
+      "stage.writingMode": "writing mode",
+      "stage.clarifyApplied": "clarification",
+      "stageVal.section": "per-section",
+      "stageVal.single": "single pass",
+      "stageVal.yes": "applied",
+      "stageVal.no": "not applied",
 
       /* Crawler tab: top half is the process window (resets when the crawler restarts),
-         bottom half is this task's crawl health. */
+         bottom half is this task's crawl health.
+         Wording rule: the interface speaks plainly, field names stay in the API. A reader
+         does not need to know the backend calls it `picked`, only how many search hits were
+         chosen to fetch. */
       "crawl.globalHeading": "This process window (global)",
       "crawl.taskHeading": "Crawl health for this task",
-      "crawl.window": "Window {s}s · single process, {n} worker",
-      "crawl.total": "{n} scraped rows",
-      "crawl.outcome": "Failure composition (by reason)",
-      "crawl.pageKind": "Page kinds",
-      "crawl.statusClass": "Status classes",
-      "crawl.truncated": "{n} truncated rows",
+      "crawl.window": "Window {s}s · single process ({n} worker)",
+      "crawl.total": "{n} fetches recorded",
+      "crawl.outcome": "Why fetches failed",
+      "crawl.pageKind": "Page types",
+      "crawl.statusClass": "HTTP status",
+      "crawl.truncated": "{n} pages were truncated",
       "crawl.latencyLabel": "Latency",
-      "crawl.latency": "p50 {p50}ms · p95 {p95}ms (percentiles over the last {sampled}/{total} calls)",
-      "crawl.topDomains": "Top {n} domains",
-      "crawl.otherDomains": "{total} more rows from {domains} domains ({unreadable} rows had no usable host)",
+      "crawl.latency": "median {p50} ms · 95th percentile {p95} ms (over the last {sampled}/{total} calls)",
+      "crawl.topDomains": "Busiest {n} sites",
+      "crawl.otherDomains": "{total} more fetches from {domains} sites ({unreadable} had no usable host name)",
       "crawl.search": "Search",
-      "crawl.byRetriever": "By retriever",
-      "crawl.resultsPerQuery": "Results per query",
-      "crawl.nonSite": "Local refusals (not site failures): {list}",
-      "crawl.funnel": "Funnel: collected {collected} → picked {picked} → returned {returned} → valid {valid}",
-      "crawl.citedUnread": "Citations to never-fetched pages {unread}/{cited} ({pct}%)",
-      "crawl.buckets": "silent drops {silent} · login walls {blocked} · clean {clean} · degraded {degraded} · other failures {failed}",
-      "crawl.failures": "Failure samples (URL + reason)",
+      "crawl.byRetriever": "By search source",
+      "crawl.resultsPerQuery": "Results per search",
+      "crawl.nonSite": "Refused locally (not the site's problem): {list}",
+      "crawl.nonSiteNone": "none this window",
+      "crawl.funnel": "Fetch flow: {collected} sources found → {picked} chosen to fetch → {returned} pages came back → {valid} usable",
+      "crawl.citedUnread": "The report cites {cited} sources, {unread} of them ({pct}%) were never fetched",
+      "crawl.buckets": "{silent} vanished without a reason · {blocked} hit a login/paywall · {clean} fetched cleanly · {degraded} fetched with caveats · {failed} other failures",
+      "crawl.failures": "Failure details (URL + reason)",
       "crawl.failuresOmitted": "{n} more beyond the cap are not listed",
       "crawl.noHealth": "No crawl-health event for this task: an older task, or it never reached scraping",
-      "crawl.unreachable": "Crawler unreachable: {msg}",
-      "crawl.noData": "No scrape has been recorded in this window yet",
+      "crawl.unreachable": "Crawler service unreachable: {msg}",
+      "crawl.noData": "No fetches recorded in this window yet",
+
+      /* Human names for the values the crawler returns.
+         ⚠️ The vocabulary is **owned by the crawler side** (`crawler/pycrawler/scraper/outcome.py`,
+         REASONS/PAGE_KINDS); this is only a **mirror**. A code with no entry here is displayed
+         as-is (never blank, never an error), so a new reason on the crawler side degrades to
+         showing the code instead of breaking. A test pins mirror against owner
+         (`DashboardCodeLabelsTest`). `2xx`–`5xx` are left alone: HTTP status classes are
+         already common wording. */
+      "code.ok": "ok",
+      "code.http_4xx": "site returned 4xx",
+      "code.http_5xx": "site returned 5xx",
+      "code.timeout": "timed out",
+      "code.network_error": "could not connect",
+      "code.too_large": "too large (gave up locally)",
+      "code.no_session": "no session/proxy config (gave up locally)",
+      "code.empty_content": "no main content extracted",
+      "code.too_short": "text too short",
+      "code.block_challenge": "blocked by anti-bot",
+      "code.word_list": "looks like a challenge page",
+      "code.pdf_unresolved": "PDF could not be opened",
+      "code.unsafe_url": "unsafe address (refused locally)",
+      "code.exception": "error while processing",
+      "code.unknown": "reason unknown",
+      "code.empty": "no results",
+      "code.error": "call failed",
+      "code.network": "network-layer failure",
+      "code.none": "no status code",
+      "code.article": "article",
+      "code.listing": "listing",
+      "code.login_or_wall": "login wall / paywall",
+      "code.download_or_resource": "download / resource",
+      "code.error_page": "error page",
+      "code.other": "other",
+      /* ⚠️ Same code, different meaning: `unknown` as a failure reason means "no reason was
+         recorded", while as a page kind it means "could not tell what this page is".
+         A single flat table would mislabel the latter, so page kinds get their own entry. */
+      "pagekind.unknown": "page type unknown",
 
       /* Evidence */
       "evd.count": "{n} structured evidence items (extracted: insight is the model's judgement, quote is the source's original text)",
@@ -350,6 +504,12 @@
       /* Report */
       "rpt.notSucceeded": "Task has not succeeded yet; the report becomes available after SUCCEEDED.",
       "rpt.loaded": "Raw text/markdown ({n} chars)",
+      "rpt.viewRendered": "Rendered",
+      "rpt.viewRendered.title": "Formatted view (default)",
+      "rpt.viewRaw": "Raw",
+      "rpt.viewRaw.title": "Raw markdown source, exactly as stored",
+      "rpt.rendered": "Rendered (raw source: {n} chars)",
+      "rpt.fallback": "Rendering unavailable, showing raw text instead (raw source: {n} chars)",
 
       /* Submit dialog */
       "form.title": "New research",

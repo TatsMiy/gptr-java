@@ -1,4 +1,4 @@
-# gptr-java — 本地基础设施（Postgres + MinIO + 爬虫服务）
+# gptr-java — 本地基础设施（Postgres + MinIO + 爬虫服务 [+ 可选 SearXNG]）
 #
 # 启动：  docker compose up -d --build
 # 停止：  docker compose down          （保留数据卷）
@@ -7,6 +7,9 @@
 # 可选配置写在同目录的 .env（不入库；模板见 .env.example）：
 #   BOCHA_API_KEY        博查（Bocha）Web Search key —— 国内直连、免代理，评测首选检索源
 #   HTTP_PROXY/HTTPS_PROXY  抓取出网代理（留空 = 直连）
+#   SEARX_URL            自建 SearXNG 地址（留空 = 用本文件里的默认值 http://gptr-searxng:8080）
+#   SEARX_ENGINES        传给 SearXNG 的引擎白名单（逗号分隔；留空 = 用实例默认引擎集）
+#   SEARX_LANGUAGE       传给 SearXNG 的 language 参数（留空 = 用实例默认）
 #
 # 构建上下文是仓库内的相对路径 ./crawler，克隆后即可构建，无外部依赖。
 # 中国大陆网络可用 --build-arg 覆盖镜像源，见 crawler/Dockerfile 顶部说明。
@@ -42,6 +45,27 @@ services:
     volumes:
       - miniodata:/data
 
+  # 自建 SearXNG（可选）：零 key 的聚合检索源。
+  # ⚠️ 先准备配置（settings.yml 不入库，只提供模板）：
+  #     cp searxng/settings.yml.example searxng/settings.yml
+  # 只绑回环，不暴露到局域网：宿主 8888 → 容器 8080（浏览器访问 http://127.0.0.1:8888/）。
+  searxng:
+    image: ${SEARXNG_IMAGE:-searxng/searxng:latest}
+    container_name: gptr-searxng
+    ports:
+      - "127.0.0.1:8888:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxngdata:/var/cache/searxng
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/searxng/.venv/bin/python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   # Python 无状态爬虫服务（仓库内子目录 ./crawler，自包含构建）
   # 开发期暴露 127.0.0.1:8000（Java worker 在宿主运行）；生产可改为仅内部网络。
   crawler:
@@ -54,14 +78,21 @@ services:
       DDG_PROXY: "${DDG_PROXY:-}"
       HTTP_PROXY: "${HTTP_PROXY:-}"
       HTTPS_PROXY: "${HTTPS_PROXY:-}"
-      # NO_PROXY 必须包含 bochaai.com，否则检索请求会绕代理而显著变慢。
-      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,.local,bochaai.com,gptr-crawler,gptr-postgres,gptr-minio}"
+      # NO_PROXY 必须包含 bochaai.com 与 gptr-searxng：前者否则检索会绕代理变慢，
+      # 后者否则 crawler 调同一网络里的 SearXNG 也会被拽去走代理（变慢或直接不通）。
+      NO_PROXY: "${NO_PROXY:-localhost,127.0.0.1,.local,bochaai.com,gptr-crawler,gptr-postgres,gptr-minio,gptr-searxng}"
       # 博查（Bocha）Web Search key（可选）：国内直连、无需代理、无反爬。
       # 限速：Tier 0（￥0）QPS=1 / QPM=30 / QPD=1000；检索器内置进程级节流器，
       # 保证两次「发起」间隔 ≥ BOCHA_MIN_INTERVAL（流水线式，不阻塞响应）。
       # 留空 ⇒ 该检索器不可用；仍可使用零 key 的其它检索源。
       BOCHA_API_KEY: "${BOCHA_API_KEY:-}"
       BOCHA_MIN_INTERVAL: "${BOCHA_MIN_INTERVAL:-1.05}"
+      # 自建 SearXNG 检索器（任务 config 里写 retriever=searx 才会用到）。
+      # 前两项留空 = 用实例默认；留空时实测整批查询只有 1 个引擎贡献结果，建议显式填白名单
+      # （引擎名以实例 /config 的实测名为准；可用性由出口 IP 决定，换出口要重测）。
+      SEARX_URL: "${SEARX_URL:-http://gptr-searxng:8080}"
+      SEARX_ENGINES: "${SEARX_ENGINES:-}"
+      SEARX_LANGUAGE: "${SEARX_LANGUAGE:-}"
     ports:
       - "127.0.0.1:8000:8000"
     extra_hosts:
@@ -76,3 +107,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  searxngdata:

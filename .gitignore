@@ -15,3 +15,6 @@ results/
 # Python 构建产物（2026-09-06 清扫批曾误入 71 个 .pyc）
 __pycache__/
 *.pyc
+
+# SearXNG 实例配置：本机副本不入库（模板见 searxng/settings.yml.example）
+searxng/settings.yml
