@@ -2,10 +2,9 @@
 
 [中文](README.md) | **English**
 
-Ask a question; it searches over several rounds, drafts an outline, writes section by section, and
-returns a report where **every sentence can be traced back to a verbatim quote**. A self-hosted
-single-node service: Java 21 + Spring Boot 3.5, Postgres as the task substrate, with a web
-dashboard you can watch while it runs.
+A **deep research service for long-horizon research tasks** (Java 21): a recursive research graph
+(LangGraph4j) running on a Postgres task substrate (atomic dequeue + leases + budgets), with a web
+dashboard and an auditable evaluator.
 
 > **What one task looks like**: input "how do open-source deep research projects differ in citation
 > trustworthiness?", and you get a sectioned report — each section ends with `[n]` citations, the
